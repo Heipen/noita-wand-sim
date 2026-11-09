@@ -1,0 +1,31 @@
+{
+  "name": "noita-wand-sim",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Noita wand simulator — runs the game's own Lua casting logic in the browser",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "build:pages": "tsc --noEmit && vite build --base=/noita-wand-sim/",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "e2e": "node scripts/e2e-m0.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fengari": "^0.1.4",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.9.0",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.0"
+  }
+}
