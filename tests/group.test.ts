@@ -65,6 +65,16 @@ describe('cast tree repeat folding', () => {
     expect(aNode.children[0].kind).toBe('sequence');
   });
 
+  it('folds identical processes even when their internal copy counts differ', () => {
+    const repeating = (copies: number) =>
+      action('A', Array.from({ length: copies }, () => card('X', action('X'))));
+    const grouped = groupTree(cast([repeating(1), repeating(3)]), true);
+    expect(grouped.children).toHaveLength(1);
+    const entry = grouped.children[0];
+    expect(entry.kind).toBe('node');
+    if (entry.kind === 'node') expect(entry.repeat).toBe(2);
+  });
+
   it('keeps non-adjacent identical nodes in their original order (no reordering)', () => {
     const grouped = groupTree(cast([action('A'), action('B'), action('A')]), true);
     // A and B differ, and the two A nodes are separated by B: folding them into one

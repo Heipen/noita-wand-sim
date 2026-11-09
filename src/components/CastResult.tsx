@@ -129,22 +129,38 @@ type GroupedEntry =
   | { kind: 'node'; group: GroupedNode; repeat: number; sig: string; id: string }
   | { kind: 'sequence'; count: number; pattern: GroupedEntry[]; sig: string; id: string };
 
+function childSignature(children: CastTreeNode[]): string {
+  // Ignore repeated copies (and their counts) when comparing trees: two copies of the
+  // same process that execute a different number of identical sub-actions should still
+  // fold together. Consecutive duplicates are collapsed, order is preserved otherwise.
+  const sigs = children.map(nodeSignature);
+  const compressed: string[] = [];
+  let last = '';
+  for (const sig of sigs) {
+    if (sig !== last) {
+      compressed.push(sig);
+      last = sig;
+    }
+  }
+  return compressed.join(',');
+}
+
 function nodeSignature(node: CastTreeNode): string {
   switch (node.kind) {
     case 'cast':
-      return `cast[${node.children.map(nodeSignature).join(',')}]`;
+      return `cast[${childSignature(node.children)}]`;
     case 'drawBlock':
-      return `draw(${node.count},${node.instantReload})[${node.children.map(nodeSignature).join(',')}]`;
+      return `draw[${childSignature(node.children)}]`;
     case 'drawCard':
-      return `card(${node.spellId ?? '-'},${node.ok})[${node.children.map(nodeSignature).join(',')}]`;
+      return `card(${node.spellId ?? '-'},${node.ok})[${childSignature(node.children)}]`;
     case 'action': {
       const delta = node.delta ? JSON.stringify(Object.entries(node.delta).sort()) : '';
       // `dontDraw` / `iteration` are deliberately not part of the signature: the same
       // process repeated with different copy bookkeeping should still fold together.
-      return `action(${node.id},${node.recursion ?? '-'},${node.permanent},${node.projectiles.join('|')},${delta})[${node.children.map(nodeSignature).join(',')}]`;
+      return `action(${node.id},${node.recursion ?? '-'},${node.permanent},${node.projectiles.join('|')},${delta})[${childSignature(node.children)}]`;
     }
     case 'trigger':
-      return `trigger(${node.triggerKind},${node.projectile ?? '-'})[${node.children.map(nodeSignature).join(',')}]`;
+      return `trigger(${node.triggerKind},${node.projectile ?? '-'})[${childSignature(node.children)}]`;
     case 'discard':
       return `discard(${node.spellId})`;
     default:
@@ -153,8 +169,10 @@ function nodeSignature(node: CastTreeNode): string {
 }
 
 function entrySignature(entry: GroupedEntry): string {
-  if (entry.kind === 'node') return `n:${entry.sig}:${entry.repeat}`;
-  return `s:${entry.count}:${entry.pattern.map(entrySignature).join('+')}`;
+  // ignore the fold counts themselves so the same pattern folds regardless of how many
+  // times each sub-run happened
+  if (entry.kind === 'node') return `n:${entry.sig}`;
+  return `s:${entry.pattern.map(entrySignature).join('+')}`;
 }
 
 function foldSequences(entries: GroupedEntry[], path: string): GroupedEntry[] {
@@ -360,6 +378,7 @@ function TreeNodeView({
   slotMap,
   parentDontDraw,
   parentKind,
+  level = 0,
 }: {
   group: GroupedNode;
   repeat: number;
@@ -373,6 +392,7 @@ function TreeNodeView({
   slotMap: Map<string, number>;
   parentDontDraw?: boolean;
   parentKind?: CastTreeNode['kind'];
+  level?: number;
 }) {
   const node = group.node;
   const renderEntries = (entries: GroupedEntry[], dontDrawContext?: boolean, parentK?: CastTreeNode['kind']) =>
@@ -389,6 +409,7 @@ function TreeNodeView({
         slotMap={slotMap}
         parentDontDraw={dontDrawContext}
         parentKind={parentK ?? node.kind}
+        level={level}
       />
     ));
 
@@ -598,6 +619,7 @@ function TreeEntryView({
   slotMap,
   parentDontDraw,
   parentKind,
+  level = 0,
 }: {
   entry: GroupedEntry;
   expanded: Set<string>;
@@ -609,30 +631,25 @@ function TreeEntryView({
   slotMap: Map<string, number>;
   parentDontDraw?: boolean;
   parentKind?: CastTreeNode['kind'];
+  level?: number;
 }) {
   if (entry.kind === 'sequence') {
     const isExpanded = expanded.has(entry.id);
     const reps = isExpanded ? entry.count : 1;
+    const color = sequenceColor(level);
     return (
-      <div className={`tree-sequence${isExpanded ? ' expanded' : ''}`}>
+      <div
+        className={`tree-sequence${isExpanded ? ' expanded' : ''}`}
+        style={{ borderLeftColor: color, background: `${color}1f` }}
+      >
         <button
           type="button"
           className="tree-sequence-head"
           onClick={() => onToggle(entry.id)}
           title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
+          style={{ color }}
         >
-          <span className="tree-brace">
-            <svg viewBox="0 0 12 100" preserveAspectRatio="none" aria-hidden="true">
-              <path
-                d="M9 0 C3 12 3 40 3 50 C3 60 3 88 9 100"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                vectorEffect="non-scaling-stroke"
-              />
-            </svg>
-          </span>
-          <span className="tree-sequence-count">↻ {t(lang, 'tree.sequence', { count: entry.count })}</span>
+          <span className="tree-sequence-count">×{entry.count}</span>
           <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
         </button>
         <div className="tree-sequence-body">
@@ -651,6 +668,7 @@ function TreeEntryView({
                   slotMap={slotMap}
                   parentDontDraw={parentDontDraw}
                   parentKind={parentKind}
+                  level={level + 1}
                 />
               ))}
             </div>
@@ -685,6 +703,7 @@ function TreeEntryView({
             slotMap={slotMap}
             parentDontDraw={parentDontDraw}
             parentKind={parentKind}
+            level={level}
           />
         ))}
       </div>
@@ -704,6 +723,7 @@ function TreeEntryView({
       slotMap={slotMap}
       parentDontDraw={parentDontDraw}
       parentKind={parentKind}
+      level={level}
     />
   );
 }
@@ -712,6 +732,11 @@ function TreeEntryView({
 
 const INDENT = 14;
 const NO_EXPAND: Set<string> = new Set();
+const SEQUENCE_COLORS = ['#8fe0b8', '#8fb8e0', '#e8a87c', '#c9a0ff', '#ffd479', '#7fd1c7'];
+
+function sequenceColor(level: number): string {
+  return SEQUENCE_COLORS[level % SEQUENCE_COLORS.length];
+}
 
 interface StoryStep {
   depth: number;
@@ -1154,43 +1179,39 @@ function ShotCard({
     [shot.events],
   );
 
-  const renderStorySteps = (steps: StoryStep[], baseDepth = 0, prefix = ''): ReactNode =>
+  const renderStorySteps = (steps: StoryStep[], baseDepth = 0, prefix = '', level = 0): ReactNode =>
     steps.map((step, index) => {
       const key = `${prefix}${index}`;
       const marginLeft = (step.depth - baseDepth) * INDENT;
       if (step.pattern && step.groupId) {
         const isExpanded = expanded.has(step.groupId);
         const reps = isExpanded ? step.count ?? 1 : 1;
+        const color = sequenceColor(level);
         return (
-          <li key={key} className="step step-sequence" style={{ marginLeft }}>
+          <li
+            key={key}
+            className="step step-sequence"
+            style={{ marginLeft, borderLeftColor: color, background: `${color}1a` }}
+          >
             <button
               type="button"
               className="step-seq-head"
               onClick={() => toggleGroup(step.groupId!)}
               title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
+              style={{ color }}
             >
               {step.text} {isExpanded ? '▾' : '▸'}
             </button>
-            <div className="step-brace-wrap">
-              <span className="step-brace">
-                <svg viewBox="0 0 12 100" preserveAspectRatio="none" aria-hidden="true">
-                  <path
-                    d="M9 0 C3 12 3 40 3 50 C3 60 3 88 9 100"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </svg>
-              </span>
-              <ol className="step-sublist">
-                {Array.from({ length: reps }, (_, rep) => (
-                  <Fragment key={rep}>
-                    {renderStorySteps(step.pattern!, step.depth, `${key}-${rep}-`)}
-                  </Fragment>
-                ))}
-              </ol>
-            </div>
+            <ol
+              className="step-sublist"
+              style={{ borderLeftColor: color, background: `${color}12` }}
+            >
+              {Array.from({ length: reps }, (_, rep) => (
+                <Fragment key={rep}>
+                  {renderStorySteps(step.pattern!, step.depth, `${key}-${rep}-`, level + 1)}
+                </Fragment>
+              ))}
+            </ol>
           </li>
         );
       }

@@ -1367,50 +1367,27 @@ main {
   padding: 0;
   border: none;
   background: none;
-  color: #8fe0b8;
   font: inherit;
   font-size: 12px;
   font-weight: 600;
   text-align: left;
   cursor: pointer;
+  color: #8fe0b8;
 }
 
 .step-seq-head:hover {
   text-decoration: underline;
 }
 
-.step-brace-wrap {
-  position: relative;
-  margin-top: 3px;
-  padding-left: 20px;
-}
-
-.step-brace {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  align-items: stretch;
-  width: 16px;
-  color: #8fe0b8;
-  pointer-events: none;
-}
-
-.step-brace svg {
-  width: 16px;
-  height: 100%;
-  display: block;
-}
-
 .step-sublist {
   list-style: none;
-  margin: 0;
-  padding: 0 0 0 6px;
+  margin: 3px 0 0;
+  padding: 3px 0 3px 10px;
   display: flex;
   flex-direction: column;
   gap: 3px;
-  border-left: 1px dashed rgba(143, 224, 184, 0.35);
+  border-left: 3px solid #8fe0b8;
+  border-radius: 4px;
 }
 
 .tree-expanded-group {
@@ -1463,8 +1440,8 @@ main {
 .tree-sequence {
   position: relative;
   margin: 6px 0;
-  padding: 4px 8px 6px 36px;
-  border: 1px dashed #2b5a4a;
+  padding: 4px 8px 6px 10px;
+  border-left: 3px solid #2b5a4a;
   border-radius: 8px;
   background: rgba(43, 90, 74, 0.12);
 }
@@ -1476,38 +1453,20 @@ main {
   padding: 0;
   border: none;
   background: none;
-  color: #8fe0b8;
   font: inherit;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  color: #8fe0b8;
 }
 
 .tree-sequence.expanded {
-  border-style: solid;
+  border-left-width: 5px;
   background: rgba(43, 90, 74, 0.2);
 }
 
 .tree-sequence-head:hover .tree-sequence-count {
   text-decoration: underline;
-}
-
-.tree-brace {
-  position: absolute;
-  left: 6px;
-  top: 0;
-  bottom: 4px;
-  display: flex;
-  align-items: stretch;
-  width: 14px;
-  color: #8fe0b8;
-  pointer-events: none;
-}
-
-.tree-brace svg {
-  width: 14px;
-  height: 100%;
-  display: block;
 }
 
 .tree-sequence-count {
@@ -1516,17 +1475,18 @@ main {
 
 .tree-sequence-hint {
   font-size: 10px;
-  color: #6f9c88;
+  opacity: 0.8;
 }
 
 .tree-sequence-body {
-  padding-left: 4px;
+  padding-left: 6px;
 }
 
 .tree-sequence-rep + .tree-sequence-rep {
   margin-top: 4px;
-  border-top: 1px dotted rgba(143, 224, 184, 0.25);
+  border-top: 1px dotted currentColor;
   padding-top: 4px;
+  opacity: 0.95;
 }
 
 .tree-repeat {
