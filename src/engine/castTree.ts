@@ -129,6 +129,11 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
         }
         break;
       }
+      case 'discard': {
+        const node: CastTreeNode = { kind: 'discard', spellId: event.spellId, children: [] };
+        top().children.push(node);
+        break;
+      }
       default:
         break;
     }

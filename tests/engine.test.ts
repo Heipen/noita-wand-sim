@@ -167,6 +167,22 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(payload?.actions[0].delta?.fire_rate_wait).toBe(100);
   });
 
+  it('reports discarded cards (hand flush and spell discards)', () => {
+    const shot = engine.simulate(wand(['LIGHT_BULLET', 'BOMB'], { actions_per_round: 2 })).shots[0];
+    const discardEvents = shot.events.filter((event) => event.type === 'discard');
+    expect(discardEvents.length).toBeGreaterThan(0);
+    const ids = discardEvents.map((event) => (event.type === 'discard' ? event.spellId : ''));
+    expect(ids).toEqual(expect.arrayContaining(['LIGHT_BULLET', 'BOMB']));
+
+    let discardNodes = 0;
+    const walk = (node: typeof shot.tree) => {
+      if (node.kind === 'discard') discardNodes += 1;
+      node.children.forEach(walk);
+    };
+    walk(shot.tree);
+    expect(discardNodes).toBe(discardEvents.length);
+  });
+
   it('builds the evaluation tree (draw block → card → action → nested draws)', () => {
     const shot = engine.simulate(wand(['LIGHT_BULLET_TRIGGER', 'BOMB'])).shots[0];
     expect(shot.tree.kind).toBe('cast');

@@ -283,6 +283,21 @@ local function __state_delta(before)
 end
 
 function __install_hooks()
+  -- 0) capture discards: spells and the end-of-cast hand flush insert into 'discarded'.
+  --    (discards caused by a failed draw are already reported via drawCard ok=false)
+  __inside_draw_action = false
+  local orig_table_insert = table.insert
+  table.insert = function(list, a, b)
+    local value = b ~= nil and b or a
+    if (not __inside_draw_action) and list == discarded and type(value) == 'table' and value.id then
+      __ev('discard', value.id, #discarded)
+    end
+    if b ~= nil then
+      return orig_table_insert(list, a, b)
+    end
+    return orig_table_insert(list, a)
+  end
+
   -- 1) wrap every spell's action closure: captures recursion/iteration, "don't draw"
   --    state, permanent-card flag and the exact shot-state delta it caused.
   for i = 1, #actions do
@@ -312,7 +327,9 @@ function __install_hooks()
     local before = #deck
     local top = nil
     if deck[1] then top = deck[1].id end
+    __inside_draw_action = true
     local ok = orig_draw_action(instant_reload_if_empty)
+    __inside_draw_action = false
     __ev('drawCard', top, before, #deck, ok)
     __ev('draw', before, #deck, state_cards_drawn, ok)
     return ok

@@ -115,9 +115,10 @@ if (!/422/.test(stats)) throw new Error('expected 422 spells');
 const shotText = await waitFor("document.querySelector('.shot-card')?.innerText || ''", 60000, 'first shot');
 console.log('✓ cast tree:', (await evaluate("document.querySelector('.shot-tree')?.innerText")).replace(/\n/g, ' | '));
 if (!shotText.includes('第 1 次施法')) throw new Error('missing shot header');
-if (!shotText.includes('投射物 2')) throw new Error('expected 2 projectiles, got: ' + shotText);
+const summaryText = await evaluate("document.querySelector('.spell-summary')?.innerText || ''");
+if (!summaryText.includes('共 2 个投射物')) throw new Error('expected summary with 2 projectiles, got: ' + summaryText);
 const treeText = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
-for (const needle of ['抽到「触发火花弹」', '开启命中触发', '抽到「炸弹」', '生成投射物']) {
+for (const needle of ['抽到「触发火花弹」', '开启命中触发', '抽到「炸弹」', '生成投射物', '弃牌']) {
   if (!treeText.includes(needle)) throw new Error(`cast tree missing ${needle}: ${treeText}`);
 }
 
@@ -127,37 +128,47 @@ await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spe
 await waitFor(`document.querySelectorAll('.wand-slot.filled').length === ${filledBefore + 1}`, 15000, 'slot filled');
 console.log('✓ click-to-add works, filled slots:', await evaluate("document.querySelectorAll('.wand-slot.filled').length"));
 
-// 3b) a modifier is visible in the cast tree + explained in the casting steps
+// 3b) modifier summary + casting steps; stat-change chips are hidden until toggled on
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'double-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("(document.querySelector('.tree-mods')?.innerText || '').includes('伤害增强')", 60000, 'modifier in cast tree');
-const modifiersText = await evaluate("document.querySelector('.tree-mods')?.innerText || ''");
-if (!modifiersText.includes('伤害增强 ×1')) throw new Error('missing modifier count: ' + modifiersText);
+const summary = await waitFor(
+  "document.querySelector('.spell-summary')?.innerText.includes('伤害增强') && document.querySelector('.spell-summary').innerText",
+  60000,
+  'modifier summary',
+);
+if (!summary.includes('携带修正') || !summary.includes('伤害增强 ×1')) throw new Error('missing modifier summary: ' + summary);
 const stepsText = await evaluate("document.querySelector('.step-list')?.innerText || ''");
 if (!stepsText.includes('抽取')) throw new Error('missing human steps: ' + stepsText);
-if (!stepsText.includes('投射物伤害')) throw new Error('missing modifier delta explanation: ' + stepsText);
 if (!stepsText.includes('执行「伤害增强」')) throw new Error('missing action explanation: ' + stepsText);
-console.log('✓ modifier shown in tree + explained in steps');
+if (stepsText.includes('投射物伤害')) throw new Error('stat changes should be hidden by default: ' + stepsText);
+await evaluate("document.querySelector('.deltas-toggle input').click(); true");
+await sleep(300);
+const stepsWithDeltas = await evaluate("document.querySelector('.step-list')?.innerText || ''");
+if (!stepsWithDeltas.includes('投射物伤害')) throw new Error('toggle should reveal modifier deltas: ' + stepsWithDeltas);
+await evaluate("document.querySelector('.deltas-toggle input').click(); true");
+console.log('✓ modifier summary + steps, stat changes toggle works');
 
 // 4) divide-by-10 preset => 800 projectiles
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
 const huge = await waitFor(
-  "(document.querySelector('.shot-header')?.innerText || '').includes('投射物 800') && document.querySelector('.shot-header').innerText",
+  "document.querySelector('.spell-summary')?.innerText.includes('800 个投射物') && document.querySelector('.spell-summary').innerText",
   60000,
-  'divide shot header',
+  'divide summary',
 );
-if (!huge.includes('投射物 800')) throw new Error('expected 800 projectiles, got: ' + huge);
+if (!huge.includes('800 个投射物')) throw new Error('expected 800 projectiles, got: ' + huge);
 const query = await evaluate('location.search');
 if (!query.includes('DIVIDE_10')) throw new Error('share URL missing DIVIDE_10: ' + query);
 console.log('✓ divide-by-10 chain:', huge.replace(/\n/g, ' | '));
 
 // 4b) wiki example: D10 + DAMAGE + LIGHT_BULLET => 11 damage modifiers, one don't-draw copy
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("(document.querySelector('.tree-mods')?.innerText || '').includes('×11')", 60000, 'wiki example modifiers');
+await waitFor("(document.querySelector('.spell-summary')?.innerText || '').includes('伤害增强 ×11')", 60000, 'wiki example modifiers');
 const wikiTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
 if (!wikiTree.includes('禁抽')) throw new Error('tree missing the don\'t-draw copy: ' + wikiTree.slice(0, 400));
 const wikiStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
 if (!wikiStory.includes('牌库已空')) throw new Error('story missing empty-deck draws: ' + wikiStory.slice(0, 400));
-console.log('✓ wiki preload example rendered: 11× 伤害增强, 1 禁抽, empty-deck draws');
+if (!wikiStory.includes('禁抽')) throw new Error('story missing the don\'t-draw explanation: ' + wikiStory.slice(0, 400));
+if (!wikiStory.includes('弃掉')) throw new Error('story missing discard steps: ' + wikiStory.slice(0, 400));
+console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discard steps');
 
 // 5) in-game style tooltip on hover
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="COLOUR_RAINBOW"]'); el.scrollIntoView({ block: 'center' }); return true; })()`);
@@ -198,10 +209,17 @@ await sleep(300);
 console.log('✓ i18n toggle works');
 
 // 8) screenshots: the wiki preload example — tree view and the narrative below it
+// reload first so the hover tooltip from step 5 cannot linger in the screenshots
+await send('Page.reload', {});
+await waitFor("(document.querySelector('.stats-bar')?.innerText || '').includes('422')", 60000, 'reload before screenshots');
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("(document.querySelector('.tree-mods')?.innerText || '').includes('×11')", 60000, 'wiki example preset');
+await waitFor("(document.querySelector('.spell-summary')?.innerText || '').includes('伤害增强 ×11')", 60000, 'wiki example preset');
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });
 await sleep(300);
+const topShot = await send('Page.captureScreenshot', { format: 'png' });
+const topPath = SHOT.replace(/\.png$/, '-top.png');
+writeFileSync(topPath, Buffer.from(topShot.data, 'base64'));
+console.log('✓ screenshot (layout):', topPath);
 await evaluate("document.querySelector('.cast-result').scrollIntoView({ block: 'start' }); true");
 await sleep(400);
 const screenshot = await send('Page.captureScreenshot', { format: 'png' });

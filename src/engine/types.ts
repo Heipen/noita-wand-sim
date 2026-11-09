@@ -18,6 +18,7 @@ export type EngineEvent =
       delta?: Record<string, number>;
     }
   | { type: 'callActionEnd' }
+  | { type: 'discard'; spellId: string; discardedCount: number }
   | { type: 'action'; id: string; deckIndex?: number | null; delta?: Record<string, number> }
   | { type: 'projectileBegin'; entity: string }
   | { type: 'projectileEnd' }
@@ -63,7 +64,8 @@ export type CastTreeNode =
       triggerKind: 'timer' | 'hitWorld' | 'death';
       projectile: string | null;
       children: CastTreeNode[];
-    };
+    }
+  | { kind: 'discard'; spellId: string; children: CastTreeNode[] };
 
 export interface ProjectileNode {
   entity: string;

@@ -103,6 +103,13 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
       case 'callActionEnd':
         events.push({ type: 'callActionEnd' });
         break;
+      case 'discard':
+        events.push({
+          type: 'discard',
+          spellId: String(entry[1]),
+          discardedCount: Number(entry[2]),
+        });
+        break;
       case 'action': {
         const deltaRaw = entry[3];
         let delta: Record<string, number> | undefined;
