@@ -118,7 +118,7 @@ if (!shotText.includes('第 1 次施法')) throw new Error('missing shot header'
 const summaryText = await evaluate("document.querySelector('.spell-summary')?.innerText || ''");
 if (!summaryText.includes('共 2 个投射物')) throw new Error('expected summary with 2 projectiles, got: ' + summaryText);
 const treeText = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
-for (const needle of ['抽到「触发火花弹」', '开启命中触发', '抽到「炸弹」', '弃牌']) {
+for (const needle of ['抽到并执行「触发火花弹」', '开启命中触发', '抽到并执行「炸弹」', '弃牌']) {
   if (!treeText.includes(needle)) throw new Error(`cast tree missing ${needle}: ${treeText}`);
 }
 if (treeText.includes('生成投射物')) throw new Error('tree should not have a separate projectile line: ' + treeText);
@@ -187,7 +187,8 @@ if (!wikiStory.includes('禁抽')) throw new Error('story missing the don\'t-dra
 if (!wikiStory.includes('弃掉')) throw new Error('story missing discard steps: ' + wikiStory.slice(0, 400));
 const repeatBadge = await evaluate("(document.querySelector('.tree-repeat')?.innerText || '')");
 if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated siblings, got badge: ' + repeatBadge);
-if (!wikiStory.includes('重复 8 次')) throw new Error('story should fold repeated runs: ' + wikiStory.slice(0, 800));
+const storyRepeatCount = await evaluate("document.querySelector('.step-sequence .step-seq-head')?.innerText || ''");
+if (!storyRepeatCount.includes('×8')) throw new Error('story should fold repeated runs: ' + JSON.stringify(storyRepeatCount));
 const storySequences = await evaluate("document.querySelectorAll('.step-sequence').length");
 if (storySequences === 0) throw new Error('story should fold repeated multi-line runs with braces');
 const stepsBeforeExpand = await evaluate("document.querySelectorAll('.step-list li').length");

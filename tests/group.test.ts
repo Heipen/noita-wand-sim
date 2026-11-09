@@ -65,6 +65,14 @@ describe('cast tree repeat folding', () => {
     expect(aNode.children[0].kind).toBe('sequence');
   });
 
+  it('aggregates identical nodes even when they are not adjacent', () => {
+    const grouped = groupTree(cast([action('A'), action('B'), action('A')]), true);
+    expect(grouped.children).toHaveLength(2);
+    const first = grouped.children[0];
+    expect(first.kind).toBe('node');
+    if (first.kind === 'node') expect(first.repeat).toBe(2);
+  });
+
   it('keeps every node when folding is disabled', () => {
     const grouped = groupTree(cast([action('DAMAGE'), action('DAMAGE')]), false);
     expect(grouped.children).toHaveLength(2);

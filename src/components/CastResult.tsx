@@ -186,6 +186,23 @@ function foldSequences(entries: GroupedEntry[], path: string): GroupedEntry[] {
   return out;
 }
 
+function aggregateEntries(entries: GroupedEntry[]): GroupedEntry[] {
+  const seen = new Map<string, Extract<GroupedEntry, { kind: 'node' }>>();
+  const out: GroupedEntry[] = [];
+  for (const entry of entries) {
+    if (entry.kind === 'node') {
+      const existing = seen.get(entry.sig);
+      if (existing) {
+        existing.repeat += entry.repeat;
+        continue;
+      }
+      seen.set(entry.sig, entry);
+    }
+    out.push(entry);
+  }
+  return out;
+}
+
 function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean, path: string): GroupedEntry[] {
   const built: GroupedNode[] = nodes.map((node, index) => ({
     node,
@@ -210,7 +227,7 @@ function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean, path: string)
       collapsed.push({ kind: 'node', group, repeat: 1, sig, id: `${path}.${collapsed.length}` });
     }
   }
-  return foldSequences(collapsed, path);
+  return aggregateEntries(foldSequences(collapsed, path));
 }
 
 function groupTree(tree: CastTreeNode, foldRepeats: boolean): GroupedNode {
@@ -359,6 +376,7 @@ function TreeNodeView({
   showDeltas,
   slotMap,
   parentDontDraw,
+  parentKind,
 }: {
   group: GroupedNode;
   repeat: number;
@@ -371,9 +389,10 @@ function TreeNodeView({
   showDeltas: boolean;
   slotMap: Map<string, number>;
   parentDontDraw?: boolean;
+  parentKind?: CastTreeNode['kind'];
 }) {
   const node = group.node;
-  const renderEntries = (entries: GroupedEntry[], dontDrawContext?: boolean) =>
+  const renderEntries = (entries: GroupedEntry[], dontDrawContext?: boolean, parentK?: CastTreeNode['kind']) =>
     entries.map((entry, index) => (
       <TreeEntryView
         key={`${entry.id}-${index}`}
@@ -386,6 +405,7 @@ function TreeNodeView({
         showDeltas={showDeltas}
         slotMap={slotMap}
         parentDontDraw={dontDrawContext}
+        parentKind={parentK ?? node.kind}
       />
     ));
 
@@ -405,6 +425,8 @@ function TreeNodeView({
       return <>{renderEntries(group.children)}</>;
     case 'drawBlock':
       if (parentDontDraw) return null;
+      // a modifier/draw block inside an action is already represented by that action's line
+      if (parentKind === 'action') return <>{renderEntries(group.children)}</>;
       return (
         <div className="tree-node tree-drawblock">
           <div className="tree-line">
@@ -421,16 +443,65 @@ function TreeNodeView({
       const spell = node.spellId ? maps.byId.get(node.spellId) : undefined;
       const name = spell ? spellName(spell, node.spellId ?? '', lang) : '';
       const failed = node.ok === false;
-      const childAction = group.children.find(
-        (entry): entry is Extract<GroupedEntry, { kind: 'node' }> =>
-          entry.kind === 'node' && entry.group.node.kind === 'action',
-      );
-      const cardSlot =
-        childAction && childAction.group.node.kind === 'action'
-          ? childAction.group.node.deckIndex !== null
-            ? childAction.group.node.deckIndex + 1
-            : null
+      const onlyAction =
+        group.children.length === 1 &&
+        group.children[0].kind === 'node' &&
+        group.children[0].group.node.kind === 'action' &&
+        group.children[0].repeat === 1
+          ? group.children[0]
           : null;
+      if (onlyAction && !failed) {
+        const actionNode = onlyAction.group.node as Extract<CastTreeNode, { kind: 'action' }>;
+        const actionSpell = maps.byId.get(actionNode.id);
+        const actionName = spellName(actionSpell, actionNode.id, lang);
+        const deltas = showDeltas ? formatDeltas(actionNode.delta, lang) : [];
+        const slot = actionNode.deckIndex !== null ? actionNode.deckIndex + 1 : slotMap.get(actionNode.id);
+        return (
+          <div className="tree-node tree-action">
+            <div className="tree-line">
+              <SpellIcon spell={actionSpell} data={data} />
+              <span className="tree-action-name">{t(lang, 'tree.drawAndAction', { name: actionName })}</span>
+              {actionSpell && <span className={`tree-type type-${actionSpell.type}`}>{t(lang, `type.${actionSpell.type}`)}</span>}
+              {slot !== undefined && <span className="tree-slot">#{slot}</span>}
+              {actionNode.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
+              {actionNode.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
+              {actionNode.recursion !== null && (
+                <span className="tree-badge">{t(lang, 'tree.recursion', { n: actionNode.recursion })}</span>
+              )}
+              {actionNode.iteration !== null && (
+                <span className="tree-badge">{t(lang, 'tree.iteration', { n: actionNode.iteration })}</span>
+              )}
+              {copiesNothing(actionNode) && <span className="tree-badge warn">{t(lang, 'tree.noCopies')}</span>}
+              {actionNode.projectiles.length > 0 && (
+                <span className="tree-projectile-inline">
+                  →{' '}
+                  {actionNode.projectiles.map((entity, index) => {
+                    const projectileSpell = maps.byEntity.get(entity);
+                    const projectileName = spellName(projectileSpell, entityLabel(entity), lang);
+                    return (
+                      <span className="tree-projectile" key={index} title={projectileName}>
+                        <SpellIcon spell={projectileSpell} data={data} />
+                        {projectileName}
+                      </span>
+                    );
+                  })}
+                </span>
+              )}
+              {repeatBadge}
+            </div>
+            {deltas.length > 0 && (
+              <div className="tree-deltas">
+                {deltas.map((delta, index) => (
+                  <span className="tree-delta" key={index}>
+                    {delta}
+                  </span>
+                ))}
+              </div>
+            )}
+            {renderEntries(onlyAction.group.children, actionNode.dontDraw, 'action')}
+          </div>
+        );
+      }
       return (
         <div className="tree-node tree-drawcard">
           <div className="tree-line">
@@ -442,7 +513,6 @@ function TreeNodeView({
             ) : (
               <span className="tree-failed">{t(lang, 'tree.drawCardEmpty')}</span>
             )}
-            {cardSlot !== null && <span className="tree-slot">#{cardSlot}</span>}
             {repeatBadge}
           </div>
           {renderEntries(group.children)}
@@ -495,7 +565,7 @@ function TreeNodeView({
               ))}
             </div>
           )}
-          {node.dontDraw ? renderEntries(group.children, true) : renderEntries(group.children)}
+          {node.dontDraw ? renderEntries(group.children, true, 'action') : renderEntries(group.children, undefined, 'action')}
         </div>
       );
     }
@@ -544,6 +614,7 @@ function TreeEntryView({
   showDeltas,
   slotMap,
   parentDontDraw,
+  parentKind,
 }: {
   entry: GroupedEntry;
   expanded: Set<string>;
@@ -554,6 +625,7 @@ function TreeEntryView({
   showDeltas: boolean;
   slotMap: Map<string, number>;
   parentDontDraw?: boolean;
+  parentKind?: CastTreeNode['kind'];
 }) {
   if (entry.kind === 'sequence') {
     const isExpanded = expanded.has(entry.id);
@@ -566,7 +638,17 @@ function TreeEntryView({
           onClick={() => onToggle(entry.id)}
           title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
         >
-          <span className="tree-brace">{'{'}</span>
+          <span className="tree-brace">
+            <svg viewBox="0 0 12 100" preserveAspectRatio="none" aria-hidden="true">
+              <path
+                d="M9 0 C3 12 3 40 3 50 C3 60 3 88 9 100"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+          </span>
           <span className="tree-sequence-count">↻ {t(lang, 'tree.sequence', { count: entry.count })}</span>
           <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
         </button>
@@ -585,6 +667,7 @@ function TreeEntryView({
                   showDeltas={showDeltas}
                   slotMap={slotMap}
                   parentDontDraw={parentDontDraw}
+                  parentKind={parentKind}
                 />
               ))}
             </div>
@@ -618,6 +701,7 @@ function TreeEntryView({
             showDeltas={showDeltas}
             slotMap={slotMap}
             parentDontDraw={parentDontDraw}
+            parentKind={parentKind}
           />
         ))}
       </div>
@@ -636,6 +720,7 @@ function TreeEntryView({
       showDeltas={showDeltas}
       slotMap={slotMap}
       parentDontDraw={parentDontDraw}
+      parentKind={parentKind}
     />
   );
 }
@@ -1104,7 +1189,17 @@ function ShotCard({
               {step.text} {isExpanded ? '▾' : '▸'}
             </button>
             <div className="step-brace-wrap">
-              <span className="step-brace">{'{'}</span>
+              <span className="step-brace">
+                <svg viewBox="0 0 12 100" preserveAspectRatio="none" aria-hidden="true">
+                  <path
+                    d="M9 0 C3 12 3 40 3 50 C3 60 3 88 9 100"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </svg>
+              </span>
               <ol className="step-sublist">
                 {Array.from({ length: reps }, (_, rep) => (
                   <Fragment key={rep}>
