@@ -140,215 +140,222 @@ export function WandEditor({
   const presetName = () => wand.name.trim() || t(lang, 'editor.defaultPresetName');
 
   return (
-    <section className="panel wand-editor">
-      <header className="panel-header">
-        <h2>{t(lang, 'editor.title')}</h2>
-        <span className="panel-sub">
-          {t(lang, 'editor.slotsUsed', { n: used, capacity: wand.capacity })}
-        </span>
-      </header>
+    <>
+      <section className="panel wand-sticky">
+        <div className="wand-sticky-head">
+          <span className="wand-sticky-name">{wand.name || t(lang, 'editor.title')}</span>
+          <span className="panel-sub">
+            {t(lang, 'editor.slotsUsed', { n: used, capacity: wand.capacity })}
+          </span>
+        </div>
+        <div className="wand-slots">
+          {slots.map((id, index) => (
+            <div
+              key={index}
+              className={`wand-slot${id ? ' filled' : ''}`}
+              data-slot={index}
+              draggable={Boolean(id)}
+              onDragStart={(event) => {
+                if (!id) return;
+                event.dataTransfer.setData('application/x-slot', String(index));
+                event.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => onDropToSlot(index, event)}
+              onPointerEnter={(event) => {
+                if (id && spellById.get(id)) hover.show(event, spellById.get(id));
+              }}
+              onPointerLeave={hover.hide}
+            >
+              {slotContent(id, index)}
+            </div>
+          ))}
+        </div>
+        <div className="always-cast">
+          <span className="field-label">{t(lang, 'editor.alwaysCast')}</span>
+          <div className="always-slots">
+            {Array.from({ length: MAX_ALWAYS_CAST }, (_, index) => {
+              const id = wand.alwaysCast[index] ?? null;
+              const spell: SpellMeta | undefined = id ? spellById.get(id) : undefined;
+              const icon = spell ? spellIconUrl(data, spell) : undefined;
+              return (
+                <div
+                  key={index}
+                  className={`wand-slot always-slot${id ? ' filled' : ''}`}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => onDropToAlways(index, event)}
+                  onPointerEnter={(event) => {
+                    if (spell) hover.show(event, spell);
+                  }}
+                  onPointerLeave={hover.hide}
+                >
+                  {id ? (
+                    <>
+                      {icon ? <img src={icon} alt="" draggable={false} /> : <span className="slot-index">★</span>}
+                      <button
+                        type="button"
+                        className="slot-remove"
+                        onClick={() => onChange(setAlwaysCast(wand, index, null))}
+                      >
+                        ×
+                      </button>
+                    </>
+                  ) : (
+                    <span className="slot-index">★</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
 
-      <div className="wand-toolbar">
-        <select
-          className="preset-select"
-          value={selectedPreset}
-          onChange={(event) => {
-            const value = event.target.value;
-            setSelectedPreset(value);
-            if (!value) return;
-            const builtIn = PRESETS.find((item) => item.id === value);
-            if (builtIn) {
-              onChange(builtIn.wand);
-              return;
-            }
-            const custom = customPresets.find((item) => item.id === value);
-            if (custom) onChange(custom.wand);
-          }}
-        >
-          <option value="">{t(lang, 'editor.presets')}…</option>
-          <optgroup label={t(lang, 'editor.builtinPresets')}>
-            {PRESETS.map((preset) => (
-              <option key={preset.id} value={preset.id}>
-                {lang === 'zh' ? preset.nameZh : preset.nameEn}
-              </option>
-            ))}
-          </optgroup>
-          {customPresets.length > 0 && (
-            <optgroup label={t(lang, 'editor.myPresets')}>
-              {customPresets.map((preset) => (
+      <section className="panel wand-editor">
+        <header className="panel-header">
+          <h2>{t(lang, 'editor.title')}</h2>
+          <span className="panel-sub">{t(lang, 'editor.settingsHint')}</span>
+        </header>
+
+        <div className="wand-toolbar">
+          <select
+            className="preset-select"
+            value={selectedPreset}
+            onChange={(event) => {
+              const value = event.target.value;
+              setSelectedPreset(value);
+              if (!value) return;
+              const builtIn = PRESETS.find((item) => item.id === value);
+              if (builtIn) {
+                onChange(builtIn.wand);
+                return;
+              }
+              const custom = customPresets.find((item) => item.id === value);
+              if (custom) onChange(custom.wand);
+            }}
+          >
+            <option value="">{t(lang, 'editor.presets')}…</option>
+            <optgroup label={t(lang, 'editor.builtinPresets')}>
+              {PRESETS.map((preset) => (
                 <option key={preset.id} value={preset.id}>
-                  {preset.name}
+                  {lang === 'zh' ? preset.nameZh : preset.nameEn}
                 </option>
               ))}
             </optgroup>
+            {customPresets.length > 0 && (
+              <optgroup label={t(lang, 'editor.myPresets')}>
+                {customPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+          <input
+            className="wand-name"
+            type="text"
+            placeholder={t(lang, 'editor.name')}
+            value={wand.name}
+            onChange={(event) => update({ name: event.target.value })}
+          />
+          <button type="button" className="secondary small" onClick={() => onSavePreset(presetName(), wand)}>
+            {t(lang, 'editor.savePreset')}
+          </button>
+          {selectedCustom && (
+            <button
+              type="button"
+              className="secondary small"
+              onClick={() => {
+                onDeletePreset(selectedPreset);
+                setSelectedPreset('');
+              }}
+            >
+              {t(lang, 'editor.deletePreset')}
+            </button>
           )}
-        </select>
-        <input
-          className="wand-name"
-          type="text"
-          placeholder={t(lang, 'editor.name')}
-          value={wand.name}
-          onChange={(event) => update({ name: event.target.value })}
-        />
-        <button type="button" className="secondary small" onClick={() => onSavePreset(presetName(), wand)}>
-          {t(lang, 'editor.savePreset')}
-        </button>
-        {selectedCustom && (
           <button
             type="button"
             className="secondary small"
             onClick={() => {
-              onDeletePreset(selectedPreset);
               setSelectedPreset('');
+              onChange(clearSpells(wand));
             }}
           >
-            {t(lang, 'editor.deletePreset')}
+            {t(lang, 'editor.clear')}
           </button>
-        )}
-        <button
-          type="button"
-          className="secondary small"
-          onClick={() => {
-            setSelectedPreset('');
-            onChange(clearSpells(wand));
-          }}
-        >
-          {t(lang, 'editor.clear')}
-        </button>
-      </div>
-
-      <div className="wand-slots">
-        {slots.map((id, index) => (
-          <div
-            key={index}
-            className={`wand-slot${id ? ' filled' : ''}`}
-            data-slot={index}
-            draggable={Boolean(id)}
-            onDragStart={(event) => {
-              if (!id) return;
-              event.dataTransfer.setData('application/x-slot', String(index));
-              event.dataTransfer.effectAllowed = 'move';
-            }}
-            onDragOver={(event) => event.preventDefault()}
-            onDrop={(event) => onDropToSlot(index, event)}
-            onPointerEnter={(event) => {
-              if (id && spellById.get(id)) hover.show(event, spellById.get(id));
-            }}
-            onPointerLeave={hover.hide}
-          >
-            {slotContent(id, index)}
-          </div>
-        ))}
-      </div>
-
-      <div className="always-cast">
-        <span className="field-label">{t(lang, 'editor.alwaysCast')}</span>
-        <div className="always-slots">
-          {Array.from({ length: MAX_ALWAYS_CAST }, (_, index) => {
-            const id = wand.alwaysCast[index] ?? null;
-            const spell: SpellMeta | undefined = id ? spellById.get(id) : undefined;
-            const icon = spell ? spellIconUrl(data, spell) : undefined;
-            return (
-              <div
-                key={index}
-                className={`wand-slot always-slot${id ? ' filled' : ''}`}
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => onDropToAlways(index, event)}
-                onPointerEnter={(event) => {
-                  if (spell) hover.show(event, spell);
-                }}
-                onPointerLeave={hover.hide}
-              >
-                {id ? (
-                  <>
-                    {icon ? <img src={icon} alt="" draggable={false} /> : <span className="slot-index">★</span>}
-                    <button
-                      type="button"
-                      className="slot-remove"
-                      onClick={() => onChange(setAlwaysCast(wand, index, null))}
-                    >
-                      ×
-                    </button>
-                  </>
-                ) : (
-                  <span className="slot-index">★</span>
-                )}
-              </div>
-            );
-          })}
         </div>
-      </div>
 
-      <div className="wand-stats">
-        <NumberField
-          label={t(lang, 'editor.spellsPerCast')}
-          value={wand.actionsPerRound}
-          min={1}
-          max={MAX_CAPACITY}
-          step={1}
-          onChange={(value) => update({ actionsPerRound: value })}
-        />
-        <NumberField
-          label={t(lang, 'editor.capacity')}
-          value={wand.capacity}
-          min={1}
-          max={MAX_CAPACITY}
-          step={1}
-          onChange={(value) => update({ capacity: value })}
-        />
-        <NumberField
-          label={t(lang, 'editor.castDelay')}
-          value={Number((wand.castDelayFrames / 60).toFixed(2))}
-          min={-5}
-          max={5}
-          step={0.01}
-          suffix={t(lang, 'editor.seconds')}
-          onChange={(value) => update({ castDelayFrames: Math.round(value * 60) })}
-        />
-        <NumberField
-          label={t(lang, 'editor.recharge')}
-          value={Number((wand.rechargeFrames / 60).toFixed(2))}
-          min={0}
-          max={10}
-          step={0.01}
-          suffix={t(lang, 'editor.seconds')}
-          onChange={(value) => update({ rechargeFrames: Math.round(value * 60) })}
-        />
-        <NumberField
-          label={t(lang, 'editor.manaMax')}
-          value={wand.manaMax}
-          min={1}
-          max={100000}
-          step={10}
-          onChange={(value) => update({ manaMax: value })}
-        />
-        <NumberField
-          label={t(lang, 'editor.manaCharge')}
-          value={wand.manaChargeSpeed}
-          min={0}
-          max={100000}
-          step={10}
-          onChange={(value) => update({ manaChargeSpeed: value })}
-        />
-        <label className="field checkbox-field">
-          <input
-            type="checkbox"
-            checked={wand.shuffle}
-            onChange={(event) => update({ shuffle: event.target.checked })}
+        <div className="wand-stats">
+          <NumberField
+            label={t(lang, 'editor.spellsPerCast')}
+            value={wand.actionsPerRound}
+            min={1}
+            max={MAX_CAPACITY}
+            step={1}
+            onChange={(value) => update({ actionsPerRound: value })}
           />
-          <span className="field-label">{t(lang, 'editor.shuffle')}</span>
-        </label>
-      </div>
+          <NumberField
+            label={t(lang, 'editor.capacity')}
+            value={wand.capacity}
+            min={1}
+            max={MAX_CAPACITY}
+            step={1}
+            onChange={(value) => update({ capacity: value })}
+          />
+          <NumberField
+            label={t(lang, 'editor.castDelay')}
+            value={Number((wand.castDelayFrames / 60).toFixed(2))}
+            min={-5}
+            max={5}
+            step={0.01}
+            suffix={t(lang, 'editor.seconds')}
+            onChange={(value) => update({ castDelayFrames: Math.round(value * 60) })}
+          />
+          <NumberField
+            label={t(lang, 'editor.recharge')}
+            value={Number((wand.rechargeFrames / 60).toFixed(2))}
+            min={0}
+            max={10}
+            step={0.01}
+            suffix={t(lang, 'editor.seconds')}
+            onChange={(value) => update({ rechargeFrames: Math.round(value * 60) })}
+          />
+          <NumberField
+            label={t(lang, 'editor.manaMax')}
+            value={wand.manaMax}
+            min={1}
+            max={100000}
+            step={10}
+            onChange={(value) => update({ manaMax: value })}
+          />
+          <NumberField
+            label={t(lang, 'editor.manaCharge')}
+            value={wand.manaChargeSpeed}
+            min={0}
+            max={100000}
+            step={10}
+            onChange={(value) => update({ manaChargeSpeed: value })}
+          />
+          <label className="field checkbox-field">
+            <input
+              type="checkbox"
+              checked={wand.shuffle}
+              onChange={(event) => update({ shuffle: event.target.checked })}
+            />
+            <span className="field-label">{t(lang, 'editor.shuffle')}</span>
+          </label>
+        </div>
 
-      <div className="wand-footer">
-        <span className="muted">
-          {t(lang, 'editor.castDelay')} {formatFramesAsSeconds(wand.castDelayFrames)}s ·{' '}
-          {t(lang, 'editor.recharge')} {formatFramesAsSeconds(wand.rechargeFrames)}s
-        </span>
-        <button type="button" className="secondary small share-button" onClick={onShare}>
-          {copied ? t(lang, 'share.copied') : t(lang, 'share.copy')}
-        </button>
-      </div>
-    </section>
+        <div className="wand-footer">
+          <span className="muted">
+            {t(lang, 'editor.castDelay')} {formatFramesAsSeconds(wand.castDelayFrames)}s ·{' '}
+            {t(lang, 'editor.recharge')} {formatFramesAsSeconds(wand.rechargeFrames)}s
+          </span>
+          <button type="button" className="secondary small share-button" onClick={onShare}>
+            {copied ? t(lang, 'share.copied') : t(lang, 'share.copy')}
+          </button>
+        </div>
+      </section>
+    </>
   );
 }

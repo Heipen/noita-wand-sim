@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CastTreeNode, EngineEvent, ShotResult, SimulationResult } from '../engine/types';
 import { formatFramesAsSeconds, formatNumber } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
@@ -125,8 +125,8 @@ interface GroupedNode {
 }
 
 type GroupedEntry =
-  | { kind: 'node'; group: GroupedNode; repeat: number; sig: string }
-  | { kind: 'sequence'; count: number; pattern: GroupedEntry[]; sig: string };
+  | { kind: 'node'; group: GroupedNode; repeat: number; sig: string; id: string }
+  | { kind: 'sequence'; count: number; pattern: GroupedEntry[]; sig: string; id: string };
 
 function nodeSignature(node: CastTreeNode): string {
   switch (node.kind) {
@@ -156,7 +156,7 @@ function entrySignature(entry: GroupedEntry): string {
   return `s:${entry.count}:${entry.pattern.map(entrySignature).join('+')}`;
 }
 
-function foldSequences(entries: GroupedEntry[]): GroupedEntry[] {
+function foldSequences(entries: GroupedEntry[], path: string): GroupedEntry[] {
   const out: GroupedEntry[] = [];
   let index = 0;
   while (index < entries.length) {
@@ -171,7 +171,7 @@ function foldSequences(entries: GroupedEntry[]): GroupedEntry[] {
         else break;
       }
       if (repeats >= 2) {
-        out.push({ kind: 'sequence', count: repeats, pattern, sig: patternSigs.join('+') });
+        out.push({ kind: 'sequence', count: repeats, pattern, sig: patternSigs.join('+'), id: `${path}.seq${out.length}` });
         index += period * repeats;
         folded = true;
         break;
@@ -185,13 +185,19 @@ function foldSequences(entries: GroupedEntry[]): GroupedEntry[] {
   return out;
 }
 
-function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean): GroupedEntry[] {
-  const built: GroupedNode[] = nodes.map((node) => ({
+function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean, path: string): GroupedEntry[] {
+  const built: GroupedNode[] = nodes.map((node, index) => ({
     node,
-    children: groupEntries(node.children, foldRepeats),
+    children: groupEntries(node.children, foldRepeats, `${path}.${index}`),
   }));
   if (!foldRepeats) {
-    return built.map((group) => ({ kind: 'node', group, repeat: 1, sig: nodeSignature(group.node) }));
+    return built.map((group, index) => ({
+      kind: 'node',
+      group,
+      repeat: 1,
+      sig: nodeSignature(group.node),
+      id: `${path}.${index}`,
+    }));
   }
   const collapsed: GroupedEntry[] = [];
   for (const group of built) {
@@ -200,14 +206,14 @@ function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean): GroupedEntry
     if (last && last.kind === 'node' && last.sig === sig) {
       last.repeat += 1;
     } else {
-      collapsed.push({ kind: 'node', group, repeat: 1, sig });
+      collapsed.push({ kind: 'node', group, repeat: 1, sig, id: `${path}.${collapsed.length}` });
     }
   }
-  return foldSequences(collapsed);
+  return foldSequences(collapsed, path);
 }
 
 function groupTree(tree: CastTreeNode, foldRepeats: boolean): GroupedNode {
-  return { node: tree, children: groupEntries(tree.children, foldRepeats) };
+  return { node: tree, children: groupEntries(tree.children, foldRepeats, 'r') };
 }
 
 export { groupTree };
@@ -301,23 +307,29 @@ function SpellSummary({
               const projectileName = spellName(spell, entityLabel(item.entity), lang);
               return (
                 <div className="summary-card" key={index}>
-                  <span className="summary-proj" title={projectileName}>
-                    <SpellIcon spell={spell} data={data} size="big" />
-                    <span className="summary-count">×{item.count}</span>
-                  </span>
-                  {item.modifiers.length > 0 && (
-                    <span className="summary-mods-icons">
-                      {item.modifiers.map(([id, count]) => {
-                        const modSpell = maps.byId.get(id);
-                        const modName = spellName(modSpell, id, lang);
-                        return (
-                          <span className="summary-mod" key={id} title={`${modName} ×${count}`}>
-                            <SpellIcon spell={modSpell} data={data} />
-                            <sup>×{count}</sup>
-                          </span>
-                        );
-                      })}
+                  <div className="summary-zone summary-projectile-zone">
+                    <span className="summary-zone-label">{t(lang, 'summary.labelProjectile')}</span>
+                    <span className="summary-proj" title={projectileName}>
+                      <SpellIcon spell={spell} data={data} size="big" />
+                      <span className="summary-count">×{item.count}</span>
                     </span>
+                  </div>
+                  {item.modifiers.length > 0 && (
+                    <div className="summary-zone summary-modifier-zone">
+                      <span className="summary-zone-label">{t(lang, 'summary.labelModifier')}</span>
+                      <span className="summary-mods-icons">
+                        {item.modifiers.map(([id, count]) => {
+                          const modSpell = maps.byId.get(id);
+                          const modName = spellName(modSpell, id, lang);
+                          return (
+                            <span className="summary-mod" key={id} title={`${modName} ×${count}`}>
+                              <SpellIcon spell={modSpell} data={data} />
+                              <sup>×{count}</sup>
+                            </span>
+                          );
+                        })}
+                      </span>
+                    </div>
                   )}
                 </div>
               );
@@ -337,6 +349,9 @@ function SpellSummary({
 function TreeNodeView({
   group,
   repeat,
+  groupId,
+  expanded,
+  onToggle,
   data,
   lang,
   maps,
@@ -346,6 +361,9 @@ function TreeNodeView({
 }: {
   group: GroupedNode;
   repeat: number;
+  groupId?: string;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
   data: GameData;
   lang: Lang;
   maps: SpellMaps;
@@ -357,8 +375,10 @@ function TreeNodeView({
   const renderEntries = (entries: GroupedEntry[], dontDrawContext?: boolean) =>
     entries.map((entry, index) => (
       <TreeEntryView
-        key={index}
+        key={`${entry.id}-${index}`}
         entry={entry}
+        expanded={expanded}
+        onToggle={onToggle}
         data={data}
         lang={lang}
         maps={maps}
@@ -368,7 +388,16 @@ function TreeNodeView({
       />
     ));
 
-  const repeatBadge = repeat > 1 && <span className="tree-repeat">×{repeat}</span>;
+  const repeatBadge = repeat > 1 && (
+    <button
+      type="button"
+      className="tree-repeat"
+      title={t(lang, 'tree.repeatTitle', { count: repeat })}
+      onClick={() => groupId && onToggle(groupId)}
+    >
+      ×{repeat}
+    </button>
+  );
 
   switch (node.kind) {
     case 'cast':
@@ -504,6 +533,8 @@ function TreeNodeView({
 
 function TreeEntryView({
   entry,
+  expanded,
+  onToggle,
   data,
   lang,
   maps,
@@ -512,6 +543,8 @@ function TreeEntryView({
   parentDontDraw,
 }: {
   entry: GroupedEntry;
+  expanded: Set<string>;
+  onToggle: (id: string) => void;
   data: GameData;
   lang: Lang;
   maps: SpellMaps;
@@ -520,30 +553,72 @@ function TreeEntryView({
   parentDontDraw?: boolean;
 }) {
   if (entry.kind === 'sequence') {
+    const isExpanded = expanded.has(entry.id);
+    const reps = isExpanded ? entry.count : 1;
     return (
-      <div className="tree-sequence">
-        <div className="tree-sequence-head">↻ {t(lang, 'tree.sequence', { count: entry.count })}</div>
+      <div className={`tree-sequence${isExpanded ? ' expanded' : ''}`}>
+        <button
+          type="button"
+          className="tree-sequence-head"
+          onClick={() => onToggle(entry.id)}
+          title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
+        >
+          <span className="tree-brace">{'{'}</span>
+          <span className="tree-sequence-count">↻ {t(lang, 'tree.sequence', { count: entry.count })}</span>
+          <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
+        </button>
         <div className="tree-sequence-body">
-          {entry.pattern.map((item, index) => (
-            <TreeEntryView
-              key={index}
-              entry={item}
-              data={data}
-              lang={lang}
-              maps={maps}
-              showDeltas={showDeltas}
-              slotMap={slotMap}
-              parentDontDraw={parentDontDraw}
-            />
+          {Array.from({ length: reps }, (_, rep) => (
+            <div className="tree-sequence-rep" key={rep}>
+              {entry.pattern.map((item, index) => (
+                <TreeEntryView
+                  key={`${item.id}-${index}-${rep}`}
+                  entry={item}
+                  expanded={expanded}
+                  onToggle={onToggle}
+                  data={data}
+                  lang={lang}
+                  maps={maps}
+                  showDeltas={showDeltas}
+                  slotMap={slotMap}
+                  parentDontDraw={parentDontDraw}
+                />
+              ))}
+            </div>
           ))}
         </div>
       </div>
+    );
+  }
+  if (entry.repeat > 1 && expanded.has(entry.id)) {
+    return (
+      <>
+        {Array.from({ length: entry.repeat }, (_, rep) => (
+          <TreeNodeView
+            key={`${entry.id}-${rep}`}
+            group={entry.group}
+            repeat={1}
+            groupId={entry.id}
+            expanded={expanded}
+            onToggle={onToggle}
+            data={data}
+            lang={lang}
+            maps={maps}
+            showDeltas={showDeltas}
+            slotMap={slotMap}
+            parentDontDraw={parentDontDraw}
+          />
+        ))}
+      </>
     );
   }
   return (
     <TreeNodeView
       group={entry.group}
       repeat={entry.repeat}
+      groupId={entry.id}
+      expanded={expanded}
+      onToggle={onToggle}
       data={data}
       lang={lang}
       maps={maps}
@@ -557,6 +632,7 @@ function TreeEntryView({
 // --- narrative ----------------------------------------------------------------
 
 const INDENT = 14;
+const NO_EXPAND: Set<string> = new Set();
 
 interface StoryStep {
   depth: number;
@@ -564,6 +640,79 @@ interface StoryStep {
   text: string;
   spell?: SpellMeta;
   deltas: string[];
+  groupId?: string;
+  /** For a folded multi-line story sequence: the repeated pattern and its repetition count. */
+  pattern?: StoryStep[];
+  count?: number;
+}
+
+function storyStepKey(step: StoryStep): string {
+  return `${step.depth}|${step.tone}|${step.text}|${step.spell?.id ?? ''}|${JSON.stringify(step.deltas)}`;
+}
+
+/**
+ * Fold repeated multi-line runs in the flat narrative (e.g. "抽取/抽到/执行" blocks
+ * appearing several times) into a single clickable "repeats N times" step.
+ */
+function foldStorySteps(steps: StoryStep[], lang: Lang): StoryStep[] {
+  const out: StoryStep[] = [];
+  let index = 0;
+  while (index < steps.length) {
+    let folded = false;
+    const maxPeriod = Math.min(6, Math.floor((steps.length - index) / 2));
+    for (let period = 2; period <= maxPeriod; period += 1) {
+      const pattern = steps.slice(index, index + period);
+      const sigs = pattern.map(storyStepKey);
+      let repeats = 1;
+      while (index + (repeats + 1) * period <= steps.length) {
+        const block = steps
+          .slice(index + repeats * period, index + (repeats + 1) * period)
+          .map(storyStepKey);
+        if (block.every((sig, i) => sig === sigs[i])) repeats += 1;
+        else break;
+      }
+      if (repeats >= 2) {
+        out.push({
+          depth: steps[index].depth,
+          tone: 'sequence',
+          text: t(lang, 'tree.storySequence', { count: repeats }),
+          deltas: [],
+          groupId: `story-${index}-${period}`,
+          count: repeats,
+          pattern: foldStorySteps(pattern, lang),
+        });
+        index += period * repeats;
+        folded = true;
+        break;
+      }
+    }
+    if (!folded) {
+      out.push(steps[index]);
+      index += 1;
+    }
+  }
+  return out;
+}
+
+interface FlatStoryStep {
+  step: StoryStep;
+  key: string;
+}
+
+/** Expand folded story sequences for rendering (one copy collapsed, N copies when expanded). */
+function flattenStorySteps(steps: StoryStep[], expanded: Set<string>, prefix = ''): FlatStoryStep[] {
+  const out: FlatStoryStep[] = [];
+  steps.forEach((step, index) => {
+    const key = `${prefix}${index}`;
+    out.push({ step, key });
+    if (step.pattern && step.groupId) {
+      const reps = expanded.has(step.groupId) ? step.count ?? 1 : 1;
+      for (let rep = 0; rep < reps; rep += 1) {
+        out.push(...flattenStorySteps(step.pattern, expanded, `${key}-${rep}-`));
+      }
+    }
+  });
+  return out;
 }
 
 function buildStory(
@@ -572,6 +721,7 @@ function buildStory(
   maps: SpellMaps,
   showDeltas: boolean,
   slotMap: Map<string, number>,
+  expanded: Set<string>,
 ): StoryStep[] {
   const steps: StoryStep[] = [];
 
@@ -589,9 +739,17 @@ function buildStory(
     return text;
   };
 
-  const pushRepeat = (count: number, depth: number) => {
+  const projectileText = (entities: string[]): string => {
+    if (entities.length === 0) return '';
+    const names = entities.map((entity) =>
+      spellName(maps.byEntity.get(entity), entityLabel(entity), lang),
+    );
+    return t(lang, 'tree.storyProjectilesInline', { names: names.join('、') });
+  };
+
+  const pushRepeat = (count: number, depth: number, groupId?: string) => {
     if (count <= 1) return;
-    steps.push({ depth, tone: 'repeat', text: t(lang, 'tree.storyRepeat', { count }), deltas: [] });
+    steps.push({ depth, tone: 'repeat', text: t(lang, 'tree.storyRepeat', { count }), deltas: [], groupId });
   };
 
   const walkEntry = (
@@ -600,16 +758,27 @@ function buildStory(
     context: { parentAction?: string; parentActionDontDraw?: boolean; inTrigger?: boolean },
   ) => {
     if (entry.kind === 'sequence') {
+      const isExpanded = expanded.has(entry.id);
       steps.push({
         depth,
         tone: 'repeat',
         text: t(lang, 'tree.storySequence', { count: entry.count }),
         deltas: [],
+        groupId: entry.id,
       });
-      entry.pattern.forEach((item) => walkEntry(item, depth + 1, context));
+      const reps = isExpanded ? entry.count : 1;
+      for (let rep = 0; rep < reps; rep += 1) {
+        entry.pattern.forEach((item) => walkEntry(item, depth + 1, context));
+      }
       return;
     }
-    walkNode(entry.group.node, entry.group.children, depth, context, entry.repeat);
+    if (entry.repeat > 1 && expanded.has(entry.id)) {
+      for (let rep = 0; rep < entry.repeat; rep += 1) {
+        walkNode(entry.group.node, entry.group.children, depth, context, 1, undefined);
+      }
+      return;
+    }
+    walkNode(entry.group.node, entry.group.children, depth, context, entry.repeat, entry.id);
   };
 
   const walkNode = (
@@ -618,6 +787,7 @@ function buildStory(
     depth: number,
     context: { parentAction?: string; parentActionDontDraw?: boolean; inTrigger?: boolean },
     repeat: number,
+    groupId?: string,
   ) => {
     switch (node.kind) {
       case 'cast':
@@ -639,7 +809,7 @@ function buildStory(
           parentActionDontDraw: undefined,
           inTrigger: undefined,
         });
-        pushRepeat(repeat, depth + 1);
+        pushRepeat(repeat, depth + 1, groupId);
         return;
       }
       case 'drawCard': {
@@ -659,27 +829,17 @@ function buildStory(
           steps.push({
             depth,
             tone: 'action',
-            text: `${t(lang, 'tree.storyDrawAndAction', { name: actionName })}${actionAnnotations(actionNode)}${
-              copiesNothing(actionNode) ? t(lang, 'tree.storyNoCopies') : ''
-            }`,
+            text: `${t(lang, 'tree.storyDrawAndAction', { name: actionName })}${actionAnnotations(actionNode)}${projectileText(
+              actionNode.projectiles,
+            )}${copiesNothing(actionNode) ? t(lang, 'tree.storyNoCopies') : ''}`,
             spell: actionSpell,
             deltas: showDeltas ? formatDeltas(actionNode.delta, lang) : [],
           });
-          for (const entity of actionNode.projectiles) {
-            const projectileSpell = maps.byEntity.get(entity);
-            steps.push({
-              depth: depth + 1,
-              tone: 'projectile',
-              text: t(lang, 'tree.storyProjectile', { name: spellName(projectileSpell, entityLabel(entity), lang) }),
-              spell: projectileSpell,
-              deltas: [],
-            });
-          }
           walkChildren(onlyChild.group.children, depth + 1, {
             parentAction: actionName,
             parentActionDontDraw: actionNode.dontDraw,
           });
-          pushRepeat(repeat, depth + 1);
+          pushRepeat(repeat, depth + 1, groupId);
           return;
         }
         if (node.ok === false) {
@@ -690,16 +850,16 @@ function buildStory(
           steps.push({ depth, tone: 'fail', text: t(lang, 'tree.storyCardEmpty'), deltas: [] });
         }
         walkChildren(children, depth + 1, context);
-        pushRepeat(repeat, depth + 1);
+        pushRepeat(repeat, depth + 1, groupId);
         return;
       }
       case 'action': {
         const spell = maps.byId.get(node.id);
         const name = spellName(spell, node.id, lang);
         const direct = node.deckIndex === null && !node.permanent;
-        const text = `${direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name })}${actionAnnotations(node)}${
-          copiesNothing(node) ? t(lang, 'tree.storyNoCopies') : ''
-        }`;
+        const text = `${direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name })}${actionAnnotations(
+          node,
+        )}${projectileText(node.projectiles)}${copiesNothing(node) ? t(lang, 'tree.storyNoCopies') : ''}`;
         steps.push({
           depth,
           tone: direct ? 'call' : 'action',
@@ -707,18 +867,8 @@ function buildStory(
           spell,
           deltas: showDeltas ? formatDeltas(node.delta, lang) : [],
         });
-        for (const entity of node.projectiles) {
-          const projectileSpell = maps.byEntity.get(entity);
-          steps.push({
-            depth: depth + 1,
-            tone: 'projectile',
-            text: t(lang, 'tree.storyProjectile', { name: spellName(projectileSpell, entityLabel(entity), lang) }),
-            spell: projectileSpell,
-            deltas: [],
-          });
-        }
         walkChildren(children, depth + 1, { parentAction: name, parentActionDontDraw: node.dontDraw });
-        pushRepeat(repeat, depth + 1);
+        pushRepeat(repeat, depth + 1, groupId);
         return;
       }
       case 'trigger': {
@@ -733,7 +883,7 @@ function buildStory(
           deltas: [],
         });
         walkChildren(children, depth + 1, { inTrigger: true });
-        pushRepeat(repeat, depth + 1);
+        pushRepeat(repeat, depth + 1, groupId);
         return;
       }
       case 'discard': {
@@ -745,7 +895,7 @@ function buildStory(
           spell,
           deltas: [],
         });
-        pushRepeat(repeat, depth + 1);
+        pushRepeat(repeat, depth + 1, groupId);
         return;
       }
       default:
@@ -800,7 +950,7 @@ function buildStory(
     }
   };
 
-  walkEntry({ kind: 'node', group: root, repeat: 1, sig: '' }, 0, {});
+  walkEntry({ kind: 'node', group: root, repeat: 1, sig: '', id: 'root' }, 0, {});
   return steps;
 }
 
@@ -842,10 +992,10 @@ function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; 
         {ids.length === 0 && <span className="muted small">{t(lang, 'result.empty')}</span>}
         {ids.map((id, index) => {
           const spell = maps.byId.get(id);
+          const name = spellName(spell, id, lang);
           return (
-            <span className="pile-chip" key={`${id}-${index}`} title={id}>
+            <span className="pile-chip" key={`${id}-${index}`} title={name} aria-label={name}>
               <SpellIcon spell={spell} data={data} />
-              <span>{spellName(spell, id, lang)}</span>
             </span>
           );
         })}
@@ -893,12 +1043,32 @@ function ShotCard({
   const slotMap = useMemo(() => buildSlotMap(wandSpells), [wandSpells]);
   const [treeOpen, setTreeOpen] = useState(true);
   const [stepsOpen, setStepsOpen] = useState(true);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    setExpanded(new Set());
+  }, [shot, foldRepeats]);
+  const toggleGroup = useCallback((id: string) => {
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
   const grouped = useMemo(() => groupTree(shot.tree, foldRepeats), [shot.tree, foldRepeats]);
-  const story = useMemo(
-    () => buildStory(grouped, lang, maps, showDeltas, slotMap),
-    [grouped, lang, maps, showDeltas, slotMap],
+  // The narrative is built from the *unfolded* tree, then repeated multi-line runs are
+  // folded by the story itself (so 'A B C A B C' becomes one clickable "{ ... } ×2").
+  const storyTree = useMemo(() => groupTree(shot.tree, false), [shot.tree]);
+  const rawStory = useMemo(
+    () => buildStory(storyTree, lang, maps, showDeltas, slotMap, NO_EXPAND),
+    [storyTree, lang, maps, showDeltas, slotMap],
   );
+  const story = useMemo(
+    () => (foldRepeats ? foldStorySteps(rawStory, lang) : rawStory),
+    [rawStory, lang, foldRepeats],
+  );
+  const flatStory = useMemo(() => flattenStorySteps(story, expanded), [story, expanded]);
   const stateRows = STATE_ROWS.map((row) => {
     const value = shot.castState[row.key];
     return typeof value === 'number' && value !== 0 ? { ...row, value } : null;
@@ -948,6 +1118,8 @@ function ShotCard({
                 <TreeNodeView
                   group={grouped}
                   repeat={1}
+                  expanded={expanded}
+                  onToggle={toggleGroup}
                   data={data}
                   lang={lang}
                   maps={maps}
@@ -988,10 +1160,27 @@ function ShotCard({
         </h4>
         {stepsOpen && (
           <ol className="step-list">
-            {story.map((step, stepIndex) => (
-              <li key={stepIndex} className={`step step-${step.tone}`} style={{ marginLeft: step.depth * INDENT }}>
+            {flatStory.map(({ step, key }) => (
+              <li
+                key={key}
+                className={`step step-${step.tone}${step.pattern ? ' step-sequence' : ''}`}
+                style={{ marginLeft: step.depth * INDENT }}
+              >
                 {step.spell && <SpellIcon spell={step.spell} data={data} />}
-                <span className="step-text">{step.text}</span>
+                {step.groupId ? (
+                  <button
+                    type="button"
+                    className="step-text step-repeat-toggle"
+                    onClick={() => toggleGroup(step.groupId!)}
+                    title={t(lang, expanded.has(step.groupId) ? 'tree.foldAgain' : 'tree.expand')}
+                  >
+                    {step.pattern ? '{ ' : ''}
+                    {step.text}
+                    {step.pattern ? ' }' : ''} {expanded.has(step.groupId) ? '▾' : '▸'}
+                  </button>
+                ) : (
+                  <span className="step-text">{step.text}</span>
+                )}
                 {step.deltas.length > 0 && (
                   <span className="step-deltas">
                     {step.deltas.map((delta, deltaIndex) => (

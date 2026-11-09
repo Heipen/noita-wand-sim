@@ -96,5 +96,16 @@ await sleep(300);
 const shot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(process.env.SHOT_PATH ?? './inspect.png', Buffer.from(shot.data, 'base64'));
 
+await evaluate("document.querySelector('.step-list .step-discard')?.scrollIntoView({block:'center'}); true");
+await sleep(300);
+const discardShot = await send('Page.captureScreenshot', { format: 'png' });
+const base = process.env.SHOT_PATH ?? './inspect.png';
+writeFileSync(base.replace(/\.png$/, '-discard.png'), Buffer.from(discardShot.data, 'base64'));
+
+await evaluate("document.querySelector('.piles')?.scrollIntoView({block:'center'}); true");
+await sleep(300);
+const pilesShot = await send('Page.captureScreenshot', { format: 'png' });
+writeFileSync(base.replace(/\.png$/, '-piles.png'), Buffer.from(pilesShot.data, 'base64'));
+
 await fetch(`${CDP}/json/close/${target.id}`);
 ws.close();

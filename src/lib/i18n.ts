@@ -50,6 +50,7 @@ const zh: Dict = {
   'import.backToBundled': '返回内置数据',
   'import.introImport': '你也可以导入自己游戏目录里的数据（版本更新 / 打了模组时用）',
   'editor.title': '魔杖',
+  'editor.settingsHint': '容量 / 延迟 / 法力等参数',
   'editor.presets': '预设',
   'editor.name': '魔杖名',
   'editor.spellsPerCast': '法术数/施放',
@@ -168,6 +169,10 @@ const zh: Dict = {
   'tree.storyDrawBlocked': '「{name}」处于禁抽状态，本次没有抽取任何牌。',
   'tree.sequence': '重复 {count} 次：',
   'tree.storySequence': '下面这段过程重复 {count} 次：',
+  'tree.expand': '点击展开',
+  'tree.foldAgain': '点击收起',
+  'summary.labelProjectile': '投射物',
+  'summary.labelModifier': '修正',
   'tree.repeatTitle': '重复 {count} 次（已折叠）',
   'tree.storyRepeat': '以上过程重复 {count} 次。',
   'tree.storyDrawAndAction': '抽到并执行「{name}」',
@@ -195,6 +200,7 @@ const zh: Dict = {
   'tree.storyAction': '执行「{name}」',
   'tree.storyCall': '调用「{name}」',
   'tree.storyProjectile': '生成投射物「{name}」',
+  'tree.storyProjectilesInline': ' → 生成投射物「{names}」',
   'tree.storyTrigger': '「{name}」附带{kind}；命中后开始预载载荷：',
 };
 
@@ -247,6 +253,7 @@ const en: Dict = {
   'import.backToBundled': 'Back to bundled data',
   'import.introImport': 'You can also import data from your own game folder (for new versions / modded data)',
   'editor.title': 'Wand',
+  'editor.settingsHint': 'Capacity / delays / mana',
   'editor.presets': 'Presets',
   'editor.name': 'Wand name',
   'editor.spellsPerCast': 'Spells/Cast',
@@ -365,6 +372,10 @@ const en: Dict = {
   'tree.storyDrawBlocked': '"{name}" is under don\'t-draw, so nothing was drawn.',
   'tree.sequence': 'Repeated {count} times:',
   'tree.storySequence': 'The following steps repeat {count} times:',
+  'tree.expand': 'Click to expand',
+  'tree.foldAgain': 'Click to collapse',
+  'summary.labelProjectile': 'Projectile',
+  'summary.labelModifier': 'Modifiers',
   'tree.repeatTitle': 'Repeated {count} times (folded)',
   'tree.storyRepeat': 'The steps above repeat {count} times.',
   'tree.storyDrawAndAction': 'Drew and cast "{name}"',
@@ -392,6 +403,7 @@ const en: Dict = {
   'tree.storyAction': 'Call "{name}"',
   'tree.storyCall': 'Invoke "{name}"',
   'tree.storyProjectile': 'Spawn projectile "{name}"',
+  'tree.storyProjectilesInline': ' → spawns "{names}"',
   'tree.storyTrigger': '"{name}" gets a {kind}; payload preload begins:',
 };
 

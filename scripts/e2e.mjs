@@ -181,7 +181,16 @@ if (!wikiStory.includes('弃掉')) throw new Error('story missing discard steps:
 const repeatBadge = await evaluate("(document.querySelector('.tree-repeat')?.innerText || '')");
 if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated siblings, got badge: ' + repeatBadge);
 if (!wikiStory.includes('重复 8 次')) throw new Error('story should fold repeated runs: ' + wikiStory.slice(0, 800));
-console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discards, repeat folding');
+const storySequences = await evaluate("document.querySelectorAll('.step-sequence').length");
+if (storySequences === 0) throw new Error('story should fold repeated multi-line runs with braces');
+const stepsBeforeExpand = await evaluate("document.querySelectorAll('.step-list > li').length");
+await evaluate("document.querySelector('.step-sequence .step-repeat-toggle').click(); true");
+await sleep(300);
+const stepsAfterExpand = await evaluate("document.querySelectorAll('.step-list > li').length");
+if (stepsAfterExpand <= stepsBeforeExpand) throw new Error('clicking the story repeat count should expand it');
+await evaluate("document.querySelector('.step-sequence .step-repeat-toggle').click(); true");
+await sleep(200);
+console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discards, multi-line story folding');
 
 // 4c) Tau + divide chain: the first copied divide wipes the deck, the second copies nothing
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'tau-divide-chain'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -207,7 +216,7 @@ await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, de
 await sleep(250);
 await evaluate(`(() => {
   document.querySelector('.cast-result').scrollIntoView({ block: 'start' });
-  const sticky = document.querySelector('.wand-editor');
+  const sticky = document.querySelector('.wand-sticky');
   window.scrollBy(0, -((sticky?.offsetHeight || 0) + 16));
   return true;
 })()`);
@@ -246,7 +255,19 @@ await sleep(200);
 if ((await evaluate("document.querySelectorAll('.tree-root').length")) === 0) throw new Error('tree should expand again');
 console.log('✓ repeat folding toggle and whole-tree collapse work');
 
-// 4d) casting steps collapse, compact picker without inner scroll, sticky wand editor
+// 4c2) clicking the repeat count expands that folded group (tree), and story counts are clickable too
+const repeatBefore = await evaluate("document.querySelectorAll('.tree-action').length");
+await evaluate("document.querySelector('.tree-repeat').click(); true");
+await sleep(250);
+const repeatExpanded = await evaluate("document.querySelectorAll('.tree-action').length");
+if (repeatExpanded <= repeatBefore) throw new Error('clicking ×N should expand the repeated tree group');
+await evaluate("document.querySelector('.tree-repeat').click(); true");
+await sleep(250);
+const storyRepeatButtons = await evaluate("document.querySelectorAll('.step-repeat-toggle').length");
+if (storyRepeatButtons === 0) throw new Error('story repeat lines should be clickable');
+console.log('✓ repeat counts expand groups in tree and story');
+
+// 4d) casting steps collapse, compact picker without inner scroll, sticky spell bar
 await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
 await sleep(200);
 if ((await evaluate("document.querySelectorAll('.step-list').length")) !== 0) throw new Error('steps should collapse entirely');
@@ -254,19 +275,28 @@ await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
 await sleep(200);
 const layoutInfo = await evaluate(`(() => {
   const grid = document.querySelector('.picker-grid');
+  const stickyBar = document.querySelector('.wand-sticky');
   const editor = document.querySelector('.wand-editor');
   return {
     pickerOverflow: grid ? getComputedStyle(grid).overflowY : 'missing',
+    stickyPosition: stickyBar ? getComputedStyle(stickyBar).position : 'missing',
     editorPosition: editor ? getComputedStyle(editor).position : 'missing',
     englishSubtitles: document.querySelectorAll('.spell-card-compact .spell-subtitle').length,
+    compactBadges: document.querySelectorAll('.spell-card-compact .badge').length,
     slotNumbers: document.querySelectorAll('.wand-slot .slot-number').length,
+    summaryZones: document.querySelectorAll('.summary-projectile-zone, .summary-modifier-zone').length,
+    pileTexts: [...document.querySelectorAll('.pile-chip')].filter((el) => el.innerText.trim().length > 0).length,
   };
 })()`);
 if (layoutInfo.pickerOverflow !== 'visible') throw new Error('picker should not have an inner scroll: ' + JSON.stringify(layoutInfo));
-if (layoutInfo.editorPosition !== 'sticky') throw new Error('wand editor should stay visible while scrolling (sticky): ' + JSON.stringify(layoutInfo));
+if (layoutInfo.stickyPosition !== 'sticky') throw new Error('only the wand spells bar should be sticky: ' + JSON.stringify(layoutInfo));
+if (layoutInfo.editorPosition === 'sticky') throw new Error('the whole wand editor should no longer be sticky: ' + JSON.stringify(layoutInfo));
 if (layoutInfo.englishSubtitles !== 0) throw new Error('compact spell cards should hide the English subtitle');
+if (layoutInfo.compactBadges !== 0) throw new Error('compact spell cards should hide mana/type badges');
 if (layoutInfo.slotNumbers === 0) throw new Error('wand slots should be numbered');
-console.log('✓ steps collapse, compact picker, sticky wand editor, slot numbers');
+if (layoutInfo.summaryZones === 0) throw new Error('summary should separate projectile/modifier zones');
+if (layoutInfo.pileTexts !== 0) throw new Error('pile chips should be icons only');
+console.log('✓ steps collapse, compact picker, sticky spell bar, icon piles, summary zones');
 
 // 4e) capacity above 26, clearing keeps wand stats, saving a named preset
 const setNumberInput = `(index, value) => {
@@ -375,7 +405,7 @@ writeFileSync(topPath, Buffer.from(topShot.data, 'base64'));
 console.log('✓ screenshot (layout):', topPath);
 await evaluate(`(() => {
   document.querySelector('.cast-result').scrollIntoView({ block: 'start' });
-  const sticky = document.querySelector('.wand-editor');
+  const sticky = document.querySelector('.wand-sticky');
   window.scrollBy(0, -((sticky?.offsetHeight || 0) + 16));
   return true;
 })()`);
