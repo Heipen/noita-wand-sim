@@ -1,5 +1,7 @@
 # Noita 魔杖模拟器 / Noita Wand Simulator
 
+> 在线站点：https://heipen.github.io/noita-wand-sim/ （M0：数据导入 + 法术目录；规则引擎开发中）
+
 在浏览器里模拟 **Noita** 的魔杖施法：自己往魔杖里装法术，看它到底会怎么施放。
 核心思路不是"照着 Wiki 重写规则"，而是**直接运行游戏自带的施法 Lua**（`data/scripts/gun/gun.lua` + `gun_actions.lua`），所以牌堆、抽取、递归、一分为多、追加触发等复杂机制与游戏同源。
 
