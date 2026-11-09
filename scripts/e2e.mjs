@@ -196,6 +196,11 @@ if (!tauTree.includes('未复制任何法术')) throw new Error('tree should mar
 const tauStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
 if (!tauStory.includes('没有可复制')) throw new Error('story should explain the empty copy: ' + tauStory.slice(0, 600));
 if (!tauStory.includes('弃掉')) throw new Error('tau story missing divide discards: ' + tauStory.slice(0, 600));
+if (!tauStory.includes('从牌库顶依次弃掉 4 张牌')) throw new Error('story should group the divide discard loop: ' + tauStory.slice(-700));
+const tauPiles = await evaluate("document.querySelector('.piles')?.innerText || ''");
+if (!tauPiles.includes('本次施法弃牌') || !tauPiles.includes('充能后会回到牌库')) {
+  throw new Error('piles should list the cards discarded during the cast: ' + tauPiles);
+}
 console.log('✓ Tau + divide chain: 32 spark bolts, deck wiped, second copy empty');
 
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });
