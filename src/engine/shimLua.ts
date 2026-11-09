@@ -346,6 +346,9 @@ function __install_hooks()
   -- 3) playing a card: which card was drawn, then the action itself.
   local orig_play_action = play_action
   function play_action(action)
+    -- the draw attempt itself is over: discards caused by spells (e.g. divide) are
+    -- real discards and must be reported, unlike the failed-draw discard above
+    __inside_draw_action = false
     local before = __capture_shot_state()
     __ev('playAction', action.id, action.deck_index)
     local actionIndex = #__events + 1

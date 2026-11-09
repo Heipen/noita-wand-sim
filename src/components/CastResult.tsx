@@ -42,6 +42,15 @@ function entityLabel(entity: string): string {
   return entity.split('/').pop() ?? entity;
 }
 
+/** Spells that copy/duplicate other spells from the deck. */
+function isDuplicator(id: string): boolean {
+  return /^DIVIDE_\d+$/.test(id) || id === 'TAU' || id === 'OMEGA';
+}
+
+function copiesNothing(node: Extract<CastTreeNode, { kind: 'action' }>): boolean {
+  return isDuplicator(node.id) && node.children.length === 0 && node.projectiles.length === 0;
+}
+
 function SpellIcon({ spell, data }: { spell?: SpellMeta; data: GameData }) {
   const icon = spell ? spellIconUrl(data, spell) : undefined;
   return icon ? <img className="mini-icon" src={icon} alt="" /> : <span className="mini-icon placeholder" />;
@@ -378,6 +387,7 @@ function TreeNodeView({
             {node.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
             {node.recursion !== null && <span className="tree-badge">{t(lang, 'tree.recursion', { n: node.recursion })}</span>}
             {node.iteration !== null && <span className="tree-badge">{t(lang, 'tree.iteration', { n: node.iteration })}</span>}
+            {copiesNothing(node) && <span className="tree-badge warn">{t(lang, 'tree.noCopies')}</span>}
             <RepeatBadge group={group} lang={lang} />
           </div>
           {deltas.length > 0 && (
@@ -527,7 +537,9 @@ function buildStory(root: GroupedNode, lang: Lang, maps: SpellMaps, showDeltas: 
           steps.push({
             depth,
             tone: 'action',
-            text: `${t(lang, 'tree.storyDrawAndAction', { name: actionName })}${actionAnnotations(actionNode)}`,
+            text: `${t(lang, 'tree.storyDrawAndAction', { name: actionName })}${actionAnnotations(actionNode)}${
+              copiesNothing(actionNode) ? t(lang, 'tree.storyNoCopies') : ''
+            }`,
             spell: actionSpell,
             deltas: showDeltas ? formatDeltas(actionNode.delta, lang) : [],
           });
@@ -565,7 +577,9 @@ function buildStory(root: GroupedNode, lang: Lang, maps: SpellMaps, showDeltas: 
         const spell = maps.byId.get(node.id);
         const name = spellName(spell, node.id, lang);
         const direct = node.deckIndex === null && !node.permanent;
-        const text = `${direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name })}${actionAnnotations(node)}`;
+        const text = `${direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name })}${actionAnnotations(node)}${
+          copiesNothing(node) ? t(lang, 'tree.storyNoCopies') : ''
+        }`;
         steps.push({
           depth,
           tone: direct ? 'call' : 'action',

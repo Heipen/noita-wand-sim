@@ -173,6 +173,42 @@ if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated sibli
 if (!wikiStory.includes('重复 8 次')) throw new Error('story should fold repeated runs: ' + wikiStory.slice(0, 800));
 console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discards, repeat folding');
 
+// 4c) Tau + divide chain: the first copied divide wipes the deck, the second copies nothing
+await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'tau-divide-chain'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+const tauSummary = await waitFor(
+  "document.querySelector('.spell-summary')?.innerText.includes('火花弹 ×32') && document.querySelector('.spell-summary').innerText",
+  60000,
+  'tau divide chain summary',
+);
+if (!tauSummary.includes('火花弹 ×32')) throw new Error('tau chain should make 32 spark bolts: ' + tauSummary);
+const tauTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
+if (!tauTree.includes('未复制任何法术')) throw new Error('tree should mark the empty copied divide: ' + tauTree.slice(0, 600));
+const tauStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
+if (!tauStory.includes('没有可复制')) throw new Error('story should explain the empty copy: ' + tauStory.slice(0, 600));
+if (!tauStory.includes('弃掉')) throw new Error('tau story missing divide discards: ' + tauStory.slice(0, 600));
+console.log('✓ Tau + divide chain: 32 spark bolts, deck wiped, second copy empty');
+
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });
+await sleep(250);
+await evaluate("document.querySelector('.cast-result').scrollIntoView({ block: 'start' }); true");
+await sleep(350);
+const tauShot = await send('Page.captureScreenshot', { format: 'png' });
+const tauPath = SHOT.replace(/\.png$/, '-tau.png');
+writeFileSync(tauPath, Buffer.from(tauShot.data, 'base64'));
+console.log('✓ screenshot (tau chain):', tauPath);
+
+await evaluate(`(() => {
+  const badges = [...document.querySelectorAll('.tree-badge')];
+  const empty = badges.find((el) => el.textContent.includes('未复制任何法术'));
+  empty?.scrollIntoView({ block: 'center' });
+  return true;
+})()`);
+await sleep(350);
+const tauEmptyShot = await send('Page.captureScreenshot', { format: 'png' });
+const tauEmptyPath = SHOT.replace(/\.png$/, '-tau-empty.png');
+writeFileSync(tauEmptyPath, Buffer.from(tauEmptyShot.data, 'base64'));
+console.log('✓ screenshot (empty copied divide):', tauEmptyPath);
+
 // 4c) fold toggle + whole-tree collapse
 const foldedNodes = await evaluate("document.querySelectorAll('.tree-action').length");
 await evaluate("document.querySelector('input[data-toggle=fold]').click(); true");

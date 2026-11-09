@@ -227,6 +227,35 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(projectiles).toBe(1);
   });
 
+  it('Tau copies two deck cards; the copied divide can wipe the deck and leave the second copy empty', () => {
+    const shot = engine.simulate(
+      wand(['TAU', 'DIVIDE_2', 'DIVIDE_4', 'DIVIDE_2', 'LIGHT_BULLET']),
+      { mana: 2000 },
+    ).shots[0];
+
+    const discardIds = shot.events.filter((event) => event.type === 'discard').map((event) => (event.type === 'discard' ? event.spellId : ''));
+    // the first copied divide discards all four cards that were still in the deck
+    expect(discardIds).toEqual(expect.arrayContaining(['DIVIDE_2', 'DIVIDE_4', 'LIGHT_BULLET']));
+    expect(discardIds.length).toBeGreaterThanOrEqual(4);
+
+    let bulletCalls = 0;
+    let emptyCopiers = 0;
+    const walk = (node: typeof shot.tree) => {
+      if (node.kind === 'action') {
+        if (node.id === 'LIGHT_BULLET') bulletCalls += 1;
+        if (isDuplicatorId(node.id) && node.children.length === 0 && node.projectiles.length === 0) emptyCopiers += 1;
+      }
+      node.children.forEach(walk);
+    };
+    const isDuplicatorId = (id: string) => /^DIVIDE_\d+$/.test(id) || id === 'TAU' || id === 'OMEGA';
+    walk(shot.tree);
+
+    // 2 × 2 × 4 × 2 light bullets from the copied divide chain
+    expect(bulletCalls).toBe(32);
+    // Tau's second copied spell is the last DIVIDE_4 and finds an empty deck
+    expect(emptyCopiers).toBe(1);
+  });
+
   it('shuffles deterministically for the same frame/world seed', () => {
     const shuffled = wand(['LIGHT_BULLET', 'BOMB', 'CHAINSAW', 'DAMAGE', 'SPARK_BOLT'], {
       shuffle_deck_when_empty: true,

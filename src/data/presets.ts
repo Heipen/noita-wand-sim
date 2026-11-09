@@ -97,6 +97,17 @@ export const PRESETS: WandPreset[] = [
     }),
   },
   {
+    id: 'tau-divide-chain',
+    nameZh: '陶 + 分裂链（牌库被弃空）',
+    nameEn: 'Tau + divide chain (deck wiped)',
+    wand: makeWand('陶 + 分裂链（牌库被弃空）', ['TAU', 'DIVIDE_2', 'DIVIDE_4', 'DIVIDE_2', 'LIGHT_BULLET'], {
+      castDelayFrames: 0,
+      rechargeFrames: 40,
+      manaMax: 20000,
+      manaChargeSpeed: 2000,
+    }),
+  },
+  {
     id: 'refresh-ring',
     nameZh: '刷新环循环',
     nameEn: 'Wand refresh loop',
