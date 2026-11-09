@@ -15,7 +15,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "build:data": "tsx scripts/build-data-pack.ts",
-    "e2e": "node scripts/e2e-m0.mjs",
+    "e2e": "node scripts/e2e.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

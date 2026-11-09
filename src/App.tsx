@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CastResult } from './components/CastResult';
 import { ImportPanel } from './components/ImportPanel';
-import { SpellGrid } from './components/SpellGrid';
+import { SpellPicker } from './components/SpellPicker';
+import { SpellTooltip } from './components/SpellTooltip';
 import { StatsBar } from './components/StatsBar';
-import { Toolbar } from './components/Toolbar';
+import { WandEditor } from './components/WandEditor';
+import { useSpellTooltip } from './hooks/useSpellTooltip';
 import { loadBundledData } from './lib/bundledData';
 import {
   buildGameData,
@@ -14,12 +17,26 @@ import {
 } from './lib/gameData';
 import { t } from './lib/i18n';
 import { loadStoredImport, saveStoredImport } from './lib/idb';
-import type { GameData, Lang, SpellType } from './lib/types';
+import { configureEngineScripts, simulateWand } from './lib/simClient';
+import { ENGINE_SCRIPT_PATHS } from './engine/sources';
+import { wakText } from './lib/wak';
+import {
+  createDefaultWand,
+  decodeWandFromQuery,
+  encodeWandToQuery,
+  firstEmptySlot,
+  placeSpell,
+  shareUrlForWand,
+  toEngineWand,
+  type WandState,
+} from './lib/wand';
+import type { GameData, Lang } from './lib/types';
 
 const LANG_KEY = 'noita-wand-sim.lang';
 const PREFER_LOCAL_KEY = 'noita-wand-sim.preferLocal';
 
 type Phase = 'boot' | 'empty' | 'loading' | 'ready';
+type SimMode = 'single' | 'untilReload';
 
 function readInitialLang(): Lang {
   try {
@@ -29,6 +46,14 @@ function readInitialLang(): Lang {
     /* ignore */
   }
   return 'zh';
+}
+
+function readInitialWand(): WandState {
+  if (typeof window !== 'undefined') {
+    const fromUrl = decodeWandFromQuery(window.location.search);
+    if (fromUrl) return fromUrl;
+  }
+  return createDefaultWand();
 }
 
 function prefersLocalData(): boolean {
@@ -69,9 +94,14 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GameData | null>(null);
   const [bundled, setBundled] = useState<GameData | null>(null);
-  const [query, setQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<SpellType | 'all'>('all');
+  const [wand, setWand] = useState<WandState>(readInitialWand);
+  const [mode, setMode] = useState<SimMode>('single');
+  const [result, setResult] = useState<Awaited<ReturnType<typeof simulateWand>> | null>(null);
+  const [simulating, setSimulating] = useState(false);
+  const [simError, setSimError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const supportsDirectory = useMemo(() => supportsDirectoryPicker(), []);
+  const { tooltip, show: showTooltip, hide: hideTooltip } = useSpellTooltip();
 
   useEffect(() => {
     try {
@@ -86,7 +116,6 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // A previously imported local dataset takes priority when the user chose it.
       if (prefersLocalData()) {
         setPhase('loading');
         setStage('parsing');
@@ -126,6 +155,72 @@ export default function App() {
     };
   }, []);
 
+  // Give the engine worker the scripts of the active data source.
+  useEffect(() => {
+    if (!data) return;
+    if (data.origin === 'local' && data.wak) {
+      const scripts: Record<string, string> = {};
+      for (const path of ENGINE_SCRIPT_PATHS) {
+        const text = wakText(data.wak, path);
+        if (text) scripts[path] = text;
+      }
+      configureEngineScripts(scripts);
+    } else {
+      configureEngineScripts(undefined);
+    }
+  }, [data]);
+
+  // Debounced simulation whenever the wand or mode changes.
+  useEffect(() => {
+    if (phase !== 'ready' || !data) return;
+    const slots = wand.spells.slice(0, wand.capacity);
+    const hasSpells = slots.some(Boolean) || wand.alwaysCast.some(Boolean);
+    if (!hasSpells) {
+      setResult(null);
+      setSimError(null);
+      setSimulating(false);
+      return;
+    }
+    let cancelled = false;
+    setSimulating(true);
+    setSimError(null);
+    const handle = window.setTimeout(() => {
+      const engineWand = toEngineWand(wand);
+      simulateWand(engineWand, {
+        clicks: 1,
+        untilReload: mode === 'untilReload',
+        maxShots: 50,
+        mana: wand.manaMax,
+        frame: 0,
+        worldSeed: 0,
+      })
+        .then((simulation) => {
+          if (!cancelled) setResult(simulation);
+        })
+        .catch((reason: unknown) => {
+          if (!cancelled) setSimError(reason instanceof Error ? reason.message : String(reason));
+        })
+        .finally(() => {
+          if (!cancelled) setSimulating(false);
+        });
+    }, 220);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [phase, data, wand, mode]);
+
+  // Keep the URL shareable at all times.
+  useEffect(() => {
+    if (phase !== 'ready') return;
+    try {
+      const query = encodeWandToQuery(wand);
+      window.history.replaceState(null, '', `${window.location.pathname}?${query}`);
+    } catch {
+      /* ignore */
+    }
+  }, [phase, wand]);
+
   const handleImport = useCallback(async (loader: () => Promise<RawGameImport>) => {
     setError(null);
     setPhase('loading');
@@ -164,20 +259,26 @@ export default function App() {
     }
   }, [bundled]);
 
-  const filteredSpells = useMemo(() => {
-    if (!data) return [];
-    const q = query.trim().toLowerCase();
-    return data.spells.filter((spell) => {
-      if (typeFilter !== 'all' && spell.type !== typeFilter) return false;
-      if (!q) return true;
-      return (
-        spell.id.toLowerCase().includes(q) ||
-        spell.nameEn.toLowerCase().includes(q) ||
-        spell.nameZh.includes(q) ||
-        spell.displayZh.includes(q)
-      );
-    });
-  }, [data, query, typeFilter]);
+  const addSpell = useCallback(
+    (spellId: string) => {
+      const slot = firstEmptySlot(wand);
+      if (slot >= 0 && slot < wand.capacity) {
+        setWand(placeSpell(wand, slot, spellId));
+      }
+    },
+    [wand],
+  );
+
+  const share = useCallback(async () => {
+    const url = shareUrlForWand(wand);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch {
+      window.prompt(t(lang, 'share.copy'), url);
+    }
+  }, [wand, lang]);
 
   return (
     <div className="app">
@@ -239,20 +340,37 @@ export default function App() {
                 setPhase('empty');
               }}
             />
-            <Toolbar
-              lang={lang}
-              query={query}
-              typeFilter={typeFilter}
-              shown={filteredSpells.length}
-              total={data.spells.length}
-              onQueryChange={setQuery}
-              onTypeChange={setTypeFilter}
-            />
-            <SpellGrid spells={filteredSpells} data={data} lang={lang} />
+            <div className="sim-layout">
+              <WandEditor
+                data={data}
+                lang={lang}
+                wand={wand}
+                hover={{ show: showTooltip, hide: hideTooltip }}
+                onChange={setWand}
+                onShare={() => void share()}
+                copied={copied}
+              />
+              <SpellPicker
+                data={data}
+                lang={lang}
+                hover={{ show: showTooltip, hide: hideTooltip }}
+                onAdd={addSpell}
+              />
+              <CastResult
+                result={result}
+                data={data}
+                lang={lang}
+                mode={mode}
+                onModeChange={setMode}
+                simulating={simulating}
+                error={simError}
+              />
+            </div>
           </>
         )}
       </main>
 
+      {data && <SpellTooltip tooltip={tooltip} data={data} lang={lang} />}
       <footer className="app-footer">{t(lang, 'footer.note')}</footer>
     </div>
   );

@@ -23,7 +23,10 @@ export function buildCastBlock(events: EngineEvent[]): CastBlock {
       case 'triggerBegin': {
         const carrier = lastProjectile.get(current);
         const block: CastBlock = { projectiles: [], castState: {} };
-        if (carrier) carrier.trigger = block;
+        if (carrier) {
+          carrier.trigger = block;
+          carrier.triggerKind = event.kind;
+        }
         stack.push(block);
         break;
       }

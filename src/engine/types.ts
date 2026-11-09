@@ -15,6 +15,8 @@ export type EngineEvent =
 
 export interface ProjectileNode {
   entity: string;
+  /** Which kind of trigger this projectile carries (hit world / timer / death). */
+  triggerKind?: 'timer' | 'hitWorld' | 'death';
   trigger?: CastBlock;
 }
 
