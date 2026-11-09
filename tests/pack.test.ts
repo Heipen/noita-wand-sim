@@ -41,6 +41,39 @@ describe.skipIf(!available)('bundled data pack', () => {
     expect(byId.get('DIVIDE_10')?.type).toBe('other');
   });
 
+  it('keeps the fields needed for the in-game-style hover tooltip', () => {
+    const byId = new Map(pack.spells.map((s) => [s.id, s]));
+    const rainbow = byId.get('COLOUR_RAINBOW');
+    expect(rainbow).toBeTruthy();
+    expect(rainbow).toMatchObject({
+      nameZh: '彩虹闪光',
+      type: 'modifier',
+      mana: 0,
+      // -8 frames @60fps = -0.13s 施放延迟
+      castDelayFrames: -8,
+      spawnLevel: '2,3,4,10',
+      spawnProbability: '0.1,0.1,0.1,0.2',
+      spawnRequiresFlag: 'card_unlocked_paint',
+      unlockZh: '找到实验性魔杖',
+    });
+    expect(rainbow?.descZh).toContain('随机颜色');
+
+    const recharge = byId.get('RECHARGE');
+    expect(recharge?.castDelayFrames).toBe(-10);
+    expect(recharge?.reloadFrames).toBe(-20);
+
+    // castDelayFrames must be the reflection-pass fire_rate_wait delta
+    for (const spell of pack.spells) {
+      const delta = spell.stateDelta?.fire_rate_wait;
+      if (typeof delta === 'number') expect(spell.castDelayFrames).toBe(delta);
+    }
+
+    const withUnlockText = pack.spells.filter((s) => s.unlockZh).length;
+    expect(withUnlockText).toBeGreaterThan(90);
+    const withState = pack.spells.filter((s) => Object.keys(s.stateDelta ?? {}).length > 0).length;
+    expect(withState).toBeGreaterThan(350);
+  });
+
   it('ships every icon referenced by the catalog', () => {
     const missing = pack.spells.filter((spell) => {
       if (!spell.icon) return true;

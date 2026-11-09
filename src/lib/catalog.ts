@@ -5,12 +5,78 @@ import type { Translations } from './csv';
 import { wakText } from './wak';
 
 /**
- * Extracts spell metadata by executing the game's own `gun_actions.lua` in a Lua VM.
+ * Extracts spell metadata by executing the game's own `gun.lua` in a Lua VM.
  *
- * We only build the `actions` table (the per-spell `action` closures are never called),
- * so no engine API shim beyond `dofile` is required. This is the same approach that the
- * M0/M1 rule engine will use; here we just serialize the table.
+ * Two passes, both mirroring how the game itself builds spell cards:
+ *  1. load `gun.lua` (it loads `gun_actions.lua`, the generated config glue and the
+ *     extra modifiers), then serialize the `actions` table;
+ *  2. "reflection pass" like `data/scripts/gun/gun_collect_metadata.lua`: with
+ *     `reflecting = true`, run every spell's action closure on an empty shot and record
+ *     the resulting shot state (cast delay, recharge, damage modifiers, ...). This is the
+ *     same data the in-game tooltip is derived from, so it is kept per spell for the
+ *     future hover tooltip / stats panel.
  */
+
+/**
+ * Minimal engine API stubs, enough to *load* gun.lua and run the reflection pass.
+ * The M1 rule engine will replace this with a real shim that records events.
+ */
+const ENGINE_STUBS = `
+function RegisterGun() end
+function RegisterGunAction() end
+function RegisterGunShotEffects() end
+function SetProjectileConfigs() end
+function BeginProjectile() end
+function EndProjectile() end
+function BeginTriggerTimer() end
+function BeginTriggerHitWorld() end
+function BeginTriggerDeath() end
+function EndTrigger() end
+function Reflection_RegisterProjectile() end
+function OnActionPlayed() end
+function OnActionCalled() end
+function OnActionFinished() end
+function OnNotEnoughManaForAction() end
+function ActionUsed() end
+function ActionUsesRemainingChanged() return true end
+function LogAction() end
+function StartReload() end
+function BaabInstruction() end
+function SetRandomSeed() end
+function Random(a, b) return a end
+function GameGetFrameNum() return 0 end
+function GameGetRealWorldTimeSinceStarted() return 0 end
+function GamePrint() end
+function Note() end
+function HasFlagPersistent() return false end
+function GlobalsGetValue(k, d) return d or '' end
+function GlobalsSetValue() end
+function EntityLoad() return 0 end
+function EntityCreate() return 0 end
+function EntityKill() end
+function EntityGetWithTag() return {} end
+function EntityGetInRadiusWithTag() return {} end
+function EntityGetAllChildren() return {} end
+function EntityGetName() return '' end
+function EntityHasTag() return false end
+function EntityGetTransform() return 0, 0 end
+function EntityGetFirstComponent() return nil end
+function EntityGetFirstComponentIncludingDisabled() return nil end
+function EntityGetComponent() return nil end
+function EntityInflictDamage() end
+function GetUpdatedEntityID() return 0 end
+function GetWorldEntityID() return 0 end
+function ComponentGetValue2() return 0 end
+function ComponentSetValue2() end
+function ComponentGetValueBool() return false end
+function ComponentGetValueInt() return 0 end
+function ComponentGetValueFloat() return 0 end
+function ComponentSetValueBool() end
+function ComponentSetValueInt() end
+function ComponentSetValueFloat() end
+function ComponentGetMemberBool() return false end
+function print_error() end
+`;
 
 const LUA_PRELUDE = `
 _loaded = {}
@@ -53,7 +119,32 @@ function __json_encode(v)
 end
 `;
 
+// Fields captured in the reflection pass — the ones shown on the in-game spell tooltip
+// plus a few that the stats panel will need later.
+const REFLECT_FIELDS = [
+  'fire_rate_wait',
+  'reload_time',
+  'action_draw_many_count',
+  'spread_degrees',
+  'speed_multiplier',
+  'lifetime_add',
+  'damage_projectile_add',
+  'damage_explosion_add',
+  'damage_critical_chance',
+  'explosion_radius',
+  'bounces',
+  'gravity',
+  'screenshake',
+  'recoil',
+  'draw_many_count',
+];
+
 const LUA_EXTRACT = `
+local fields = { ${REFLECT_FIELDS.map((f) => `'${f}'`).join(', ')} }
+
+local defaults = {}
+ConfigGunActionInfo_Init(defaults)
+
 local out = {}
 for i = 1, #actions do
   local a = actions[i]
@@ -64,16 +155,48 @@ for i = 1, #actions do
     type = a.type,
     mana = a.mana,
     max_uses = a.max_uses,
+    price = a.price,
     sprite = a.sprite,
     sprite_unidentified = a.sprite_unidentified,
     related_projectiles = a.related_projectiles,
+    related_extra_entities = a.related_extra_entities,
     custom_xml_file = a.custom_xml_file,
     recursive = a.recursive,
-    price = a.price,
+    spawn_level = a.spawn_level,
+    spawn_probability = a.spawn_probability,
     spawn_requires_flag = a.spawn_requires_flag,
+    spawn_manual_unlock = a.spawn_manual_unlock,
+    is_dangerous_blast = a.is_dangerous_blast,
+    ai_never_uses = a.ai_never_uses,
+    never_unlimited = a.never_unlimited,
   }
 end
-return __json_encode({ count = #actions, spells = out })
+
+-- reflection pass: compute each spell's shot-state contribution
+local state = {}
+reflecting = true
+ConfigGunShotEffects_Init(shot_effects)
+for i = 1, #actions do
+  local action = actions[i]
+  current_reload_time = 0
+  local shot = create_shot(1)
+  c = shot.state
+  set_current_action(action)
+  local ok = pcall(action.action)
+  register_action(c)
+
+  local delta = {}
+  for _, field in ipairs(fields) do
+    local value = c[field]
+    if value ~= nil and value ~= defaults[field] then
+      delta[field] = value
+    end
+  end
+  state[#state + 1] = { id = action.id, ok = ok, state = delta }
+end
+reflecting = false
+
+return __json_encode({ count = #actions, spells = out, reflection = state })
 `;
 
 function loadChunk(L: any, code: string, name: string, resultCount = 0): void {
@@ -87,10 +210,54 @@ function loadChunk(L: any, code: string, name: string, resultCount = 0): void {
   }
 }
 
+interface ReflectionRow {
+  id: string;
+  ok: boolean;
+  state: Record<string, number | string>;
+}
+
+interface RawExtraction {
+  count: number;
+  spells: Record<string, any>[];
+  reflection: ReflectionRow[];
+}
+
+function toRawSpell(a: Record<string, any>): RawSpell {
+  return {
+    id: String(a.id ?? ''),
+    nameKey: String(a.name ?? ''),
+    descKey: String(a.description ?? ''),
+    typeValue: typeof a.type === 'number' ? a.type : -1,
+    mana: typeof a.mana === 'number' ? a.mana : null,
+    maxUses: typeof a.max_uses === 'number' ? a.max_uses : null,
+    sprite: typeof a.sprite === 'string' ? a.sprite : null,
+    spriteUnidentified: typeof a.sprite_unidentified === 'string' ? a.sprite_unidentified : null,
+    relatedProjectiles: Array.isArray(a.related_projectiles)
+      ? a.related_projectiles.filter((p: unknown) => typeof p === 'string')
+      : [],
+    relatedExtraEntities: Array.isArray(a.related_extra_entities)
+      ? a.related_extra_entities.filter((p: unknown) => typeof p === 'string')
+      : [],
+    customXmlFile: typeof a.custom_xml_file === 'string' ? a.custom_xml_file : null,
+    recursive: a.recursive === true,
+    price: typeof a.price === 'number' ? a.price : null,
+    spawnRequiresFlag: typeof a.spawn_requires_flag === 'string' ? a.spawn_requires_flag : null,
+    spawnLevel: typeof a.spawn_level === 'string' ? a.spawn_level : null,
+    spawnProbability: typeof a.spawn_probability === 'string' ? a.spawn_probability : null,
+    spawnManualUnlock: a.spawn_manual_unlock === true,
+    isDangerousBlast: a.is_dangerous_blast === true,
+    // filled from the reflection pass below
+    castDelayFrames: 0,
+    reloadFrames: 0,
+    drawManyCount: 0,
+    stateDelta: {},
+  };
+}
+
 export function extractRawSpells(wak: WakArchive): RawSpell[] {
-  const actionsCode = wakText(wak, 'data/scripts/gun/gun_actions.lua');
-  if (!actionsCode) {
-    throw new Error('data.wak 中找不到 data/scripts/gun/gun_actions.lua —— 请确认选择的是 Noita 的 data 目录');
+  const gunLua = wakText(wak, 'data/scripts/gun/gun.lua');
+  if (!gunLua) {
+    throw new Error('data.wak 中找不到 data/scripts/gun/gun.lua —— 请确认选择的是 Noita 的 data 目录');
   }
 
   const L = lauxlib.luaL_newstate();
@@ -119,8 +286,8 @@ export function extractRawSpells(wak: WakArchive): RawSpell[] {
     lua.lua_setglobal(L, to_luastring('dofile'));
 
     loadChunk(L, LUA_PRELUDE, 'prelude.lua');
-    loadChunk(L, "dofile('data/scripts/gun/gun_enums.lua')", 'gun_enums');
-    loadChunk(L, actionsCode, 'gun_actions.lua');
+    loadChunk(L, ENGINE_STUBS, 'engine_stubs.lua');
+    loadChunk(L, gunLua, 'gun.lua');
 
     const status = lauxlib.luaL_loadbuffer(L, to_luastring(LUA_EXTRACT), null, to_luastring('extract.lua'));
     if (status !== lua.LUA_OK) {
@@ -131,25 +298,20 @@ export function extractRawSpells(wak: WakArchive): RawSpell[] {
       throw new Error(`Lua 执行失败 (extract): ${to_jsstring(lua.lua_tostring(L, -1))}`);
     }
     const json = to_jsstring(lua.lua_tostring(L, -1));
+    const parsed = JSON.parse(json) as RawExtraction;
 
-    const parsed = JSON.parse(json) as { count: number; spells: Record<string, any>[] };
-    return parsed.spells.map((a) => ({
-      id: String(a.id ?? ''),
-      nameKey: String(a.name ?? ''),
-      descKey: String(a.description ?? ''),
-      typeValue: typeof a.type === 'number' ? a.type : -1,
-      mana: typeof a.mana === 'number' ? a.mana : null,
-      maxUses: typeof a.max_uses === 'number' ? a.max_uses : null,
-      sprite: typeof a.sprite === 'string' ? a.sprite : null,
-      spriteUnidentified: typeof a.sprite_unidentified === 'string' ? a.sprite_unidentified : null,
-      relatedProjectiles: Array.isArray(a.related_projectiles)
-        ? a.related_projectiles.filter((p: unknown) => typeof p === 'string')
-        : [],
-      customXmlFile: typeof a.custom_xml_file === 'string' ? a.custom_xml_file : null,
-      recursive: a.recursive === true,
-      price: typeof a.price === 'number' ? a.price : null,
-      spawnRequiresFlag: typeof a.spawn_requires_flag === 'string' ? a.spawn_requires_flag : null,
-    }));
+    const reflectionById = new Map(parsed.reflection.map((row) => [row.id, row.state]));
+    return parsed.spells.map((a) => {
+      const spell = toRawSpell(a);
+      const state = reflectionById.get(spell.id) ?? {};
+      return {
+        ...spell,
+        castDelayFrames: typeof state.fire_rate_wait === 'number' ? state.fire_rate_wait : 0,
+        reloadFrames: typeof state.reload_time === 'number' ? state.reload_time : 0,
+        drawManyCount: typeof state.action_draw_many_count === 'number' ? state.action_draw_many_count : 0,
+        stateDelta: state,
+      };
+    });
   } finally {
     lua.lua_close(L);
   }

@@ -12,8 +12,9 @@
 
 - [x] **M0 数据层**：浏览器内解析 `data/data.wak`（纯前端）、执行游戏自带 Lua 导出 **422 个法术**（官方简中名 + 社区惯用名）、中英切换、图标/搜索/类型筛选。
 - [x] **M0.5 内置数据包**：站点自带 2.3 MB 数据包（法术目录 + 422 图标 + 施法 Lua + 投射物 XML），**打开即用**；也保留"使用本地数据"入口，游戏更新/打模组时可导入自己的 `data.wak`。
+- [x] **M0.6 悬浮窗数据**：已采集游戏内法术悬浮窗所需的全部字段（类型/法力消耗/施放延迟/使用次数/解锁/法术等级/生成权重 + 全部 shot state 变化），UI 在 M2 的选法术面板里实现，设计见 [docs/法术悬浮窗设计.md](docs/法术悬浮窗设计.md)。
 - [ ] M1 规则引擎（施法树、卡组、递归、Divide、触发器…）
-- [ ] M2 网页 MVP（魔杖编辑器 + 施法树 + 数值面板）
+- [ ] M2 网页 MVP（魔杖编辑器 + 选法术面板 + 悬浮窗 + 施法树 + 数值面板）
 - [ ] M3 弹体实际数值校准（以游戏内日志为准）
 - [ ] M4 2D 飞行演示（可选）
 
@@ -34,11 +35,29 @@
 
 | 内容 | 大小 |
 |---|---|
-| `spells.json`（422 个法术：名称/描述/类型/蓝耗/次数/相关投射物） | ~247 KB |
+| `spells.json`（422 个法术：名称/描述/类型/蓝耗/次数/相关投射物 + 悬浮窗字段） | ~371 KB |
 | `sprites/*.png`（422 个法术图标） | ~243 KB |
 | `game/scripts/...`（施法 Lua：`gun.lua`、`gun_actions.lua` 等） | ~700 KB |
 | `game/entities/...`（投射物 XML + 自定义卡，供数值层用） | ~1.2 MB |
-| 合计 | **~2.35 MB**（不含音频/贴图库，不是游戏本体） |
+| 合计 | **~2.47 MB**（不含音频/贴图库，不是游戏本体） |
+
+### 悬浮窗字段（M0.6 已就绪）
+
+游戏内法术卡悬浮窗显示的信息，已全部采集进 `spells.json`：
+
+| 悬浮窗项 | 字段 | 说明 |
+|---|---|---|
+| 类型 | `type` | 官方标签：投射物 / 静态投射物 / **投射修正** / 多重施放 / 材料 / 其他 / 实用 / 被动 |
+| 法力消耗 | `mana` | 可为负（如额外法力 -30） |
+| 施放延迟 | `castDelayFrames` | 帧（60fps），UI 换算成秒：`-8 → -0.13` |
+| 充能时间 | `reloadFrames` | 帧，如缩减充能时间 = -20 帧（-0.33s） |
+| 使用次数 | `maxUses` | 仅限次法术 |
+| 解锁 | `unlockZh` / `unlockFlag` | 中文解锁条件（97 条，来自中文 Wiki Cargo，CC BY-NC-SA 3.0） |
+| 法术等级 | `spawnLevel` | 如 `"2,3,4,10"` |
+| 对应等级生成权重 | `spawnProbability` | 如 `"0.1,0.1,0.1,0.2"` |
+| 其他修正数值 | `stateDelta` | 伤害/散射/速度/暴击等全部非默认 shot state |
+
+采集方式：静态字段来自 `gun_actions.lua`；施放延迟/充能等来自与游戏 `gun_collect_metadata.lua` 同款的 **reflection pass**（`reflecting=true` 下逐个执行法术 action 并记录 shot state），因此与游戏内数值同源。
 
 版权归 Nolla Games；如果你是该权利方并希望移除，请开 issue 或联系仓库作者，会立刻删除数据包（代码本身仍可配合"使用本地数据"运行）。
 
@@ -74,7 +93,9 @@ src/lib/gameData.ts          本地导入 + IndexedDB 缓存
 src/lib/i18n.ts              中英文 UI 文案（key = 英文术语 ID）
 src/components/              UI
 public/data/                 内置数据包（由脚本生成，见上）
-docs/                        计划与术语表
+scripts/build-data-pack.ts   从本机 Noita 生成 public/data
+scripts/data/                解锁条件映射（中文 Wiki Cargo，CC BY-NC-SA 3.0）
+docs/                        计划、术语表、悬浮窗设计
 ```
 
 ## License

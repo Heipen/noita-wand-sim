@@ -59,6 +59,13 @@ function copyFromWak(wakPath: string, outRelativePath = wakPath.replace(/^data\/
 }
 
 // --- spell catalog + icons ---------------------------------------------------
+// Unlock-condition text comes from the Chinese Noita Wiki Cargo table (CC BY-NC-SA 3.0);
+// see scripts/data/README.md. Missing entries simply stay null.
+const UNLOCK_ZH_PATH = 'scripts/data/wiki-unlocks-zh.json';
+const unlockZh: Record<string, string> = existsSync(UNLOCK_ZH_PATH)
+  ? JSON.parse(readFileSync(UNLOCK_ZH_PATH, 'utf8').replace(/^\uFEFF/, ''))
+  : {};
+
 const packSpells = spells.map((spell) => {
   const iconName = `${spell.id.toLowerCase()}.png`;
   if (spell.sprite) {
@@ -83,9 +90,24 @@ const packSpells = spells.map((spell) => {
     price: spell.price,
     spawnRequiresFlag: spell.spawnRequiresFlag,
     relatedProjectiles: spell.relatedProjectiles,
+    relatedExtraEntities: spell.relatedExtraEntities,
     customXmlFile: spell.customXmlFile,
     sprite: spell.sprite,
     icon: spell.sprite ? `data/sprites/${iconName}` : null,
+    // --- fields used by the (future) hover tooltip / stats panel -------------
+    // 法术等级 / 对应等级生成权重
+    spawnLevel: spell.spawnLevel,
+    spawnProbability: spell.spawnProbability,
+    spawnManualUnlock: spell.spawnManualUnlock,
+    isDangerousBlast: spell.isDangerousBlast,
+    // 施放延迟 / 充能（reflection pass, frames @60fps）
+    castDelayFrames: spell.castDelayFrames,
+    reloadFrames: spell.reloadFrames,
+    drawManyCount: spell.drawManyCount,
+    stateDelta: spell.stateDelta,
+    // 解锁
+    unlockFlag: spell.spawnRequiresFlag,
+    unlockZh: unlockZh[spell.id] ?? null,
   };
 });
 
@@ -144,12 +166,18 @@ writeOut(
   'version.json',
   JSON.stringify(
     {
+      schema: 2,
       generator: pack.generator,
       generatedAt: pack.generatedAt,
       signature,
       fileCount: wak.fileCount,
       spellCount: packSpells.length,
       build: pack.game.build,
+      fields: {
+        tooltip: ['mana', 'castDelayFrames', 'reloadFrames', 'spawnLevel', 'spawnProbability', 'unlockFlag', 'unlockZh', 'descZh', 'descEn'],
+        stats: ['stateDelta', 'relatedProjectiles', 'relatedExtraEntities', 'customXmlFile'],
+      },
+      unlockSource: 'noita.wiki.gg/zh Cargo:Spells.unlockCondition (CC BY-NC-SA 3.0)',
     },
     null,
     2,

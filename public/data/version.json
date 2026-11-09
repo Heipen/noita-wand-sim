@@ -1,8 +1,29 @@
 {
+  "schema": 2,
   "generator": "scripts/build-data-pack.ts",
-  "generatedAt": "2026-11-09T18:42:53.887Z",
+  "generatedAt": "2026-11-09T18:53:52.672Z",
   "signature": "09a034b16fba",
   "fileCount": 14745,
   "spellCount": 422,
-  "build": "Jan 2025 (9dbd52ce)"
+  "build": "Jan 2025 (9dbd52ce)",
+  "fields": {
+    "tooltip": [
+      "mana",
+      "castDelayFrames",
+      "reloadFrames",
+      "spawnLevel",
+      "spawnProbability",
+      "unlockFlag",
+      "unlockZh",
+      "descZh",
+      "descEn"
+    ],
+    "stats": [
+      "stateDelta",
+      "relatedProjectiles",
+      "relatedExtraEntities",
+      "customXmlFile"
+    ]
+  },
+  "unlockSource": "noita.wiki.gg/zh Cargo:Spells.unlockCondition (CC BY-NC-SA 3.0)"
 }
