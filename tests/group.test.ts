@@ -65,12 +65,17 @@ describe('cast tree repeat folding', () => {
     expect(aNode.children[0].kind).toBe('sequence');
   });
 
-  it('aggregates identical nodes even when they are not adjacent', () => {
+  it('keeps non-adjacent identical nodes in their original order (no reordering)', () => {
     const grouped = groupTree(cast([action('A'), action('B'), action('A')]), true);
-    expect(grouped.children).toHaveLength(2);
-    const first = grouped.children[0];
-    expect(first.kind).toBe('node');
-    if (first.kind === 'node') expect(first.repeat).toBe(2);
+    // A and B differ, and the two A nodes are separated by B: folding them into one
+    // node would reorder the cast, so they must stay as separate consecutive entries.
+    expect(grouped.children).toHaveLength(3);
+    const ids = grouped.children.map((entry) => {
+      if (entry.kind !== 'node') return 'seq';
+      const node = entry.group.node;
+      return node.kind === 'action' ? node.id : '?';
+    });
+    expect(ids).toEqual(['A', 'B', 'A']);
   });
 
   it('keeps every node when folding is disabled', () => {

@@ -186,23 +186,6 @@ function foldSequences(entries: GroupedEntry[], path: string): GroupedEntry[] {
   return out;
 }
 
-function aggregateEntries(entries: GroupedEntry[]): GroupedEntry[] {
-  const seen = new Map<string, Extract<GroupedEntry, { kind: 'node' }>>();
-  const out: GroupedEntry[] = [];
-  for (const entry of entries) {
-    if (entry.kind === 'node') {
-      const existing = seen.get(entry.sig);
-      if (existing) {
-        existing.repeat += entry.repeat;
-        continue;
-      }
-      seen.set(entry.sig, entry);
-    }
-    out.push(entry);
-  }
-  return out;
-}
-
 function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean, path: string): GroupedEntry[] {
   const built: GroupedNode[] = nodes.map((node, index) => ({
     node,
@@ -227,7 +210,7 @@ function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean, path: string)
       collapsed.push({ kind: 'node', group, repeat: 1, sig, id: `${path}.${collapsed.length}` });
     }
   }
-  return aggregateEntries(foldSequences(collapsed, path));
+  return foldSequences(collapsed, path);
 }
 
 function groupTree(tree: CastTreeNode, foldRepeats: boolean): GroupedNode {
