@@ -200,7 +200,12 @@ console.log('✓ Tau + divide chain: 32 spark bolts, deck wiped, second copy emp
 
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });
 await sleep(250);
-await evaluate("document.querySelector('.cast-result').scrollIntoView({ block: 'start' }); true");
+await evaluate(`(() => {
+  document.querySelector('.cast-result').scrollIntoView({ block: 'start' });
+  const sticky = document.querySelector('.wand-editor');
+  window.scrollBy(0, -((sticky?.offsetHeight || 0) + 16));
+  return true;
+})()`);
 await sleep(350);
 const tauShot = await send('Page.captureScreenshot', { format: 'png' });
 const tauPath = SHOT.replace(/\.png$/, '-tau.png');
@@ -363,7 +368,12 @@ const topShot = await send('Page.captureScreenshot', { format: 'png' });
 const topPath = SHOT.replace(/\.png$/, '-top.png');
 writeFileSync(topPath, Buffer.from(topShot.data, 'base64'));
 console.log('✓ screenshot (layout):', topPath);
-await evaluate("document.querySelector('.cast-result').scrollIntoView({ block: 'start' }); true");
+await evaluate(`(() => {
+  document.querySelector('.cast-result').scrollIntoView({ block: 'start' });
+  const sticky = document.querySelector('.wand-editor');
+  window.scrollBy(0, -((sticky?.offsetHeight || 0) + 16));
+  return true;
+})()`);
 await sleep(400);
 const screenshot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(SHOT, Buffer.from(screenshot.data, 'base64'));

@@ -805,8 +805,16 @@ main {
 
 .piles-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
+}
+
+.cast-discards {
+  grid-column: 1 / -1;
+}
+
+.pile-note {
+  margin-top: 2px;
 }
 
 .shot-tree h4,

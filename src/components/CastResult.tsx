@@ -621,7 +621,7 @@ function buildStory(
   ) => {
     switch (node.kind) {
       case 'cast':
-        children.forEach((child) => walkEntry(child, 0, context));
+        walkChildren(children, 0, context);
         return;
       case 'drawBlock': {
         if (context.parentActionDontDraw) return;
@@ -634,13 +634,11 @@ function buildStory(
           text = node.count === 1 ? t(lang, 'tree.storyDrawOne') : t(lang, 'tree.storyDraw', { count: node.count });
         }
         steps.push({ depth, tone: 'draw', text, deltas: [] });
-        children.forEach((child) =>
-          walkEntry(child, depth + 1, {
-            parentAction: undefined,
-            parentActionDontDraw: undefined,
-            inTrigger: undefined,
-          }),
-        );
+        walkChildren(children, depth + 1, {
+          parentAction: undefined,
+          parentActionDontDraw: undefined,
+          inTrigger: undefined,
+        });
         pushRepeat(repeat, depth + 1);
         return;
       }
@@ -677,12 +675,10 @@ function buildStory(
               deltas: [],
             });
           }
-          onlyChild.group.children.forEach((child) =>
-            walkEntry(child, depth + 1, {
-              parentAction: actionName,
-              parentActionDontDraw: actionNode.dontDraw,
-            }),
-          );
+          walkChildren(onlyChild.group.children, depth + 1, {
+            parentAction: actionName,
+            parentActionDontDraw: actionNode.dontDraw,
+          });
           pushRepeat(repeat, depth + 1);
           return;
         }
@@ -693,7 +689,7 @@ function buildStory(
         } else {
           steps.push({ depth, tone: 'fail', text: t(lang, 'tree.storyCardEmpty'), deltas: [] });
         }
-        children.forEach((child) => walkEntry(child, depth + 1, context));
+        walkChildren(children, depth + 1, context);
         pushRepeat(repeat, depth + 1);
         return;
       }
@@ -721,9 +717,7 @@ function buildStory(
             deltas: [],
           });
         }
-        children.forEach((child) =>
-          walkEntry(child, depth + 1, { parentAction: name, parentActionDontDraw: node.dontDraw }),
-        );
+        walkChildren(children, depth + 1, { parentAction: name, parentActionDontDraw: node.dontDraw });
         pushRepeat(repeat, depth + 1);
         return;
       }
@@ -738,7 +732,7 @@ function buildStory(
           }),
           deltas: [],
         });
-        children.forEach((child) => walkEntry(child, depth + 1, { inTrigger: true }));
+        walkChildren(children, depth + 1, { inTrigger: true });
         pushRepeat(repeat, depth + 1);
         return;
       }
@@ -756,6 +750,53 @@ function buildStory(
       }
       default:
         return;
+    }
+  };
+
+  const walkChildren = (
+    entries: GroupedEntry[],
+    depth: number,
+    context: { parentAction?: string; parentActionDontDraw?: boolean; inTrigger?: boolean },
+  ) => {
+    let index = 0;
+    while (index < entries.length) {
+      const entry = entries[index];
+      // group a run of "discarded by spell X" nodes into one sentence:
+      //「一分二」收尾：从牌库顶依次弃掉 4 张牌（…）
+      if (
+        entry.kind === 'node' &&
+        entry.repeat === 1 &&
+        entry.group.node.kind === 'discard' &&
+        entry.group.node.sourceAction
+      ) {
+        const source = entry.group.node.sourceAction;
+        const run: string[] = [];
+        while (index < entries.length) {
+          const next = entries[index];
+          const nextNode = next.kind === 'node' ? next.group.node : null;
+          if (nextNode && nextNode.kind === 'discard' && nextNode.sourceAction === source) {
+            run.push(nextNode.spellId);
+            index += 1;
+          } else {
+            break;
+          }
+        }
+        const sourceName = spellName(maps.byId.get(source), source, lang);
+        const cards = run.map((id) => spellName(maps.byId.get(id), id, lang)).join('、');
+        steps.push({
+          depth,
+          tone: 'discard',
+          text:
+            run.length === 1
+              ? t(lang, 'tree.storyDiscardByAction', { action: sourceName, name: cards })
+              : t(lang, 'tree.storyDiscardRun', { action: sourceName, count: run.length, cards }),
+          spell: run.length === 1 ? maps.byId.get(run[0]) : undefined,
+          deltas: [],
+        });
+        continue;
+      }
+      walkEntry(entry, depth, context);
+      index += 1;
     }
   };
 
@@ -863,6 +904,14 @@ function ShotCard({
     return typeof value === 'number' && value !== 0 ? { ...row, value } : null;
   }).filter((row): row is NonNullable<typeof row> => row !== null);
 
+  const castDiscards = useMemo(
+    () =>
+      shot.events.flatMap((event) =>
+        event.type === 'discard' && event.sourceAction !== null ? [event.spellId] : [],
+      ),
+    [shot.events],
+  );
+
   return (
     <article className="shot-card" data-shot={index + 1}>
       <header className="shot-header">
@@ -909,11 +958,19 @@ function ShotCard({
             ))}
         </section>
         <section className="piles">
-          <h4>{t(lang, 'result.piles')}</h4>
+          <h4>
+            {t(lang, 'result.piles')} <span className="muted small">{t(lang, 'result.pilesNote')}</span>
+          </h4>
           <div className="piles-grid">
             <Pile title={t(lang, 'result.pileDeck')} ids={shot.deck} data={data} lang={lang} maps={maps} />
             <Pile title={t(lang, 'result.pileHand')} ids={shot.hand} data={data} lang={lang} maps={maps} />
             <Pile title={t(lang, 'result.pileDiscard')} ids={shot.discarded} data={data} lang={lang} maps={maps} />
+            {castDiscards.length > 0 && (
+              <div className="cast-discards">
+                <Pile title={t(lang, 'result.castDiscards')} ids={castDiscards} data={data} lang={lang} maps={maps} />
+                <div className="pile-note muted small">{t(lang, 'result.castDiscardsNote')}</div>
+              </div>
+            )}
           </div>
         </section>
       </div>
