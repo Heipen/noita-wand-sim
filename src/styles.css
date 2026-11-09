@@ -201,8 +201,7 @@ main {
 
 .stats-bar .strong {
   color: var(--text);
-  font-weight: 600;
-}
+  font-weight: 600;}
 
 .stats-bar .muted {
   opacity: 0.75;
@@ -355,3 +354,15 @@ main {
   padding-top: 12px;
   text-align: center;
 }
+
+.stats-bar .spacer {
+  margin-left: auto;
+}
+
+.back-to-bundled {
+  display: flex;
+  justify-content: center;
+  margin-top: -6px;
+  margin-bottom: 12px;
+}
+

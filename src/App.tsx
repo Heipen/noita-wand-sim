@@ -3,6 +3,7 @@ import { ImportPanel } from './components/ImportPanel';
 import { SpellGrid } from './components/SpellGrid';
 import { StatsBar } from './components/StatsBar';
 import { Toolbar } from './components/Toolbar';
+import { loadBundledData } from './lib/bundledData';
 import {
   buildGameData,
   importFromFiles,
@@ -12,11 +13,11 @@ import {
   type RawGameImport,
 } from './lib/gameData';
 import { t } from './lib/i18n';
-import { clearIconCache } from './lib/icons';
 import { loadStoredImport, saveStoredImport } from './lib/idb';
 import type { GameData, Lang, SpellType } from './lib/types';
 
 const LANG_KEY = 'noita-wand-sim.lang';
+const PREFER_LOCAL_KEY = 'noita-wand-sim.preferLocal';
 
 type Phase = 'boot' | 'empty' | 'loading' | 'ready';
 
@@ -30,12 +31,44 @@ function readInitialLang(): Lang {
   return 'zh';
 }
 
+function prefersLocalData(): boolean {
+  try {
+    return localStorage.getItem(PREFER_LOCAL_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function setPreferLocalData(value: boolean): void {
+  try {
+    if (value) localStorage.setItem(PREFER_LOCAL_KEY, '1');
+    else localStorage.removeItem(PREFER_LOCAL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+async function restoreLocalImport(): Promise<GameData | null> {
+  try {
+    const stored = await loadStoredImport();
+    if (!stored) return null;
+    return await buildGameData({
+      wakBuffer: stored.wak,
+      csvText: stored.csv,
+      sourceName: stored.sourceName,
+    });
+  } catch {
+    return null;
+  }
+}
+
 export default function App() {
   const [lang, setLang] = useState<Lang>(readInitialLang);
   const [phase, setPhase] = useState<Phase>('boot');
   const [stage, setStage] = useState<ImportStage | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GameData | null>(null);
+  const [bundled, setBundled] = useState<GameData | null>(null);
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<SpellType | 'all'>('all');
   const supportsDirectory = useMemo(() => supportsDirectoryPicker(), []);
@@ -49,31 +82,43 @@ export default function App() {
     }
   }, [lang]);
 
-  // Restore the cached game data from IndexedDB on first load.
+  // Boot: bundled data first (zero setup), local import only when the user asked for it.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const stored = await loadStoredImport();
-        if (cancelled) return;
-        if (!stored) {
-          setPhase('empty');
+      // A previously imported local dataset takes priority when the user chose it.
+      if (prefersLocalData()) {
+        setPhase('loading');
+        setStage('parsing');
+        const local = await restoreLocalImport();
+        if (!cancelled && local) {
+          setData(local);
+          setBundled(await loadBundledData());
+          setPhase('ready');
+          setStage(undefined);
           return;
         }
-        setPhase('loading');
-        const game = await buildGameData(
-          { wakBuffer: stored.wak, csvText: stored.csv, sourceName: stored.sourceName },
-          (next) => !cancelled && setStage(next),
-          stored.importedAt,
-        );
-        if (cancelled) return;
-        setData(game);
+      }
+
+      const bundledData = await loadBundledData();
+      if (cancelled) return;
+      setBundled(bundledData);
+      if (bundledData) {
+        setData(bundledData);
         setPhase('ready');
-      } catch {
-        if (cancelled) return;
+        setStage(undefined);
+        return;
+      }
+
+      setPhase('loading');
+      const local = await restoreLocalImport();
+      if (cancelled) return;
+      setStage(undefined);
+      if (local) {
+        setData(local);
+        setPhase('ready');
+      } else {
         setPhase('empty');
-      } finally {
-        if (!cancelled) setStage(undefined);
       }
     })();
     return () => {
@@ -97,7 +142,7 @@ export default function App() {
         wak: raw.wakBuffer,
         csv: raw.csvText,
       });
-      clearIconCache();
+      setPreferLocalData(true);
       setData(game);
       setPhase('ready');
     } catch (err) {
@@ -107,6 +152,17 @@ export default function App() {
       setStage(undefined);
     }
   }, []);
+
+  const useBundled = useCallback(async () => {
+    const bundledData = bundled ?? (await loadBundledData());
+    setBundled(bundledData);
+    setPreferLocalData(false);
+    setError(null);
+    if (bundledData) {
+      setData(bundledData);
+      setPhase('ready');
+    }
+  }, [bundled]);
 
   const filteredSpells = useMemo(() => {
     if (!data) return [];
@@ -149,14 +205,23 @@ export default function App() {
         )}
 
         {phase === 'empty' && (
-          <ImportPanel
-            lang={lang}
-            supportsDirectory={supportsDirectory}
-            stage={stage}
-            error={error}
-            onPickDirectory={() => void handleImport(() => pickFromDirectory(setStage))}
-            onPickFiles={(files) => void handleImport(() => importFromFiles(files))}
-          />
+          <>
+            <ImportPanel
+              lang={lang}
+              supportsDirectory={supportsDirectory}
+              stage={stage}
+              error={error}
+              onPickDirectory={() => void handleImport(() => pickFromDirectory(setStage))}
+              onPickFiles={(files) => void handleImport(() => importFromFiles(files))}
+            />
+            {bundled && (
+              <div className="back-to-bundled">
+                <button className="secondary" onClick={() => void useBundled()}>
+                  {t(lang, 'import.backToBundled')}
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         {phase === 'ready' && data && (
@@ -164,9 +229,13 @@ export default function App() {
             <StatsBar
               data={data}
               lang={lang}
+              onUseLocal={() => {
+                setError(null);
+                setPhase('empty');
+              }}
+              onUseBundled={data.origin === 'local' ? () => void useBundled() : null}
               onReimport={() => {
-                clearIconCache();
-                setData(null);
+                setError(null);
                 setPhase('empty');
               }}
             />
@@ -179,7 +248,7 @@ export default function App() {
               onQueryChange={setQuery}
               onTypeChange={setTypeFilter}
             />
-            <SpellGrid spells={filteredSpells} wak={data.wak} lang={lang} />
+            <SpellGrid spells={filteredSpells} data={data} lang={lang} />
           </>
         )}
       </main>

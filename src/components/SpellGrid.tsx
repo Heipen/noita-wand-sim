@@ -1,15 +1,15 @@
 import { spellIconUrl } from '../lib/icons';
 import { spellTypeLabel, t } from '../lib/i18n';
-import type { Lang, SpellMeta, WakArchive } from '../lib/types';
+import type { GameData, Lang, SpellMeta } from '../lib/types';
 
 interface Props {
   spells: SpellMeta[];
-  wak: WakArchive;
+  data: GameData;
   lang: Lang;
 }
 
-function SpellCard({ spell, wak, lang }: { spell: SpellMeta; wak: WakArchive; lang: Lang }) {
-  const icon = spellIconUrl(wak, spell.sprite);
+function SpellCard({ spell, data, lang }: { spell: SpellMeta; data: GameData; lang: Lang }) {
+  const icon = spellIconUrl(data, spell);
   const title = lang === 'zh' ? spell.displayZh : spell.nameEn;
   const subtitle = lang === 'zh' ? spell.nameEn : spell.nameZh;
   const tooltip = [
@@ -49,14 +49,14 @@ function SpellCard({ spell, wak, lang }: { spell: SpellMeta; wak: WakArchive; la
   );
 }
 
-export function SpellGrid({ spells, wak, lang }: Props) {
+export function SpellGrid({ spells, data, lang }: Props) {
   if (spells.length === 0) {
     return <div className="empty-grid">…</div>;
   }
   return (
     <section className="spell-grid">
       {spells.map((spell) => (
-        <SpellCard key={spell.id} spell={spell} wak={wak} lang={lang} />
+        <SpellCard key={spell.id} spell={spell} data={data} lang={lang} />
       ))}
     </section>
   );

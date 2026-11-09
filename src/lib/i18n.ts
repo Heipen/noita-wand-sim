@@ -45,6 +45,10 @@ const zh: Dict = {
   'type.unknown': '未知',
   'footer.note': '非官方项目，与 Nolla Games 无关。游戏数据版权归 Nolla Games。',
   'common.loading': '加载中…',
+  'stats.useLocal': '使用本地数据',
+  'stats.useBundled': '使用内置数据',
+  'import.backToBundled': '返回内置数据',
+  'import.introImport': '你也可以导入自己游戏目录里的数据（版本更新 / 打了模组时用）',
 };
 
 const en: Dict = {
@@ -91,6 +95,10 @@ const en: Dict = {
   'type.unknown': 'Unknown',
   'footer.note': 'Unofficial project, not affiliated with Nolla Games. Game data © Nolla Games.',
   'common.loading': 'Loading…',
+  'stats.useLocal': 'Use local data',
+  'stats.useBundled': 'Use bundled data',
+  'import.backToBundled': 'Back to bundled data',
+  'import.introImport': 'You can also import data from your own game folder (for new versions / modded data)',
 };
 
 const DICTS: Record<Lang, Dict> = { zh, en };

@@ -43,6 +43,7 @@ export async function buildGameData(
     importedAt: importedAt ?? Date.now(),
     sourceName: raw.sourceName,
     hasTranslations: translations.size > 0,
+    origin: 'local',
   };
 }
 

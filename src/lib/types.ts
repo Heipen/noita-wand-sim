@@ -65,15 +65,21 @@ export interface SpellMeta extends RawSpell {
   aliasNoteZh?: string;
   descEn: string;
   descZh: string;
+  /** Relative path of the bundled icon (e.g. `data/sprites/light_bullet.png`). */
+  icon?: string | null;
 }
 
+export type DataOrigin = 'bundled' | 'local';
+
 export interface GameData {
-  wak: WakArchive;
   spells: SpellMeta[];
-  /** Stable signature of the imported data (hash of gun_actions.lua + wak header). */
+  /** Stable signature of the game data (hash of gun_actions.lua). */
   signature: string;
   importedAt: number;
   sourceName: string;
-  /** Whether common.csv was available (Chinese names). */
+  /** Whether zh-cn translations were available (bundled pack always has them). */
   hasTranslations: boolean;
+  origin: DataOrigin;
+  /** Present only for locally imported data; bundled data uses static icon paths. */
+  wak?: WakArchive;
 }
