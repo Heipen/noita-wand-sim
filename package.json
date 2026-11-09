@@ -5,6 +5,9 @@
   "type": "module",
   "description": "Noita wand simulator — runs the game's own Lua casting logic in the browser",
   "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

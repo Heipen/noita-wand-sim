@@ -13,12 +13,30 @@
 - [x] **M0 数据层**：浏览器内解析 `data/data.wak`（纯前端）、执行游戏自带 Lua 导出 **422 个法术**（官方简中名 + 社区惯用名）、中英切换、图标/搜索/类型筛选。
 - [x] **M0.5 内置数据包**：站点自带 2.3 MB 数据包（法术目录 + 422 图标 + 施法 Lua + 投射物 XML），**打开即用**；也保留"使用本地数据"入口，游戏更新/打模组时可导入自己的 `data.wak`。
 - [x] **M0.6 悬浮窗数据**：已采集游戏内法术悬浮窗所需的全部字段（类型/法力消耗/施放延迟/使用次数/解锁/法术等级/生成权重 + 全部 shot state 变化），UI 在 M2 的选法术面板里实现，设计见 [docs/法术悬浮窗设计.md](docs/法术悬浮窗设计.md)。
-- [ ] M1 规则引擎（施法树、卡组、递归、Divide、触发器…）
+- [x] **M1 规则引擎**：在 Lua VM（fengari）里执行游戏原版 `gun.lua`/`gun_actions.lua`，输出施法树 + 事件流 + shot state；覆盖触发器、一分为多（含 800 份迭代上限）、字符法术、Always Cast、乱序、帧/法力/充能；15 个引擎测试（全仓 28 个）。文档见 [docs/规则引擎.md](docs/规则引擎.md)。
 - [ ] M2 网页 MVP（魔杖编辑器 + 选法术面板 + 悬浮窗 + 施法树 + 数值面板）
 - [ ] M3 弹体实际数值校准（以游戏内日志为准）
 - [ ] M4 2D 飞行演示（可选）
 
 详细计划见 [docs/PLAN.md](docs/PLAN.md)，中文术语与文案规范见 [docs/术语表.md](docs/术语表.md)。
+
+## 规则引擎（M1）
+
+```ts
+import { createWandEngine, bundledScriptSource } from './src/engine';
+
+const engine = await createWandEngine(bundledScriptSource());
+const result = engine.simulate({
+  actions_per_round: 1,
+  shuffle_deck_when_empty: false,
+  reload_time: 40, deck_capacity: 10,
+  spells: ['LIGHT_BULLET_TRIGGER', 'BOMB'],
+});
+console.log(result.shots[0].block);   // 施法树
+console.log(result.shots[0].events);  // 预载过程/抽取/执行事件
+```
+
+引擎不重写任何施法规则：它执行数据包里的游戏 Lua，只提供引擎 API、事件记录、Noita RNG 与实体 mock。完整字段/事件/局限见 [docs/规则引擎.md](docs/规则引擎.md)。
 
 ## 使用
 
@@ -91,6 +109,7 @@ src/lib/catalog.ts           用 fengari 执行游戏 gun_actions.lua，导出�
 src/lib/bundledData.ts       加载内置数据包（打开即用）
 src/lib/gameData.ts          本地导入 + IndexedDB 缓存
 src/lib/i18n.ts              中英文 UI 文案（key = 英文术语 ID）
+src/engine/                 规则引擎（M1）
 src/components/              UI
 public/data/                 内置数据包（由脚本生成，见上）
 scripts/build-data-pack.ts   从本机 Noita 生成 public/data
