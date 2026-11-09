@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { CastBlock, EngineEvent, ProjectileNode, ShotResult, SimulationResult } from '../engine/types';
+import type { CastTreeNode, EngineEvent, ShotResult, SimulationResult } from '../engine/types';
 import { formatFramesAsSeconds, formatNumber } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
 import { t } from '../lib/i18n';
@@ -15,7 +15,12 @@ interface Props {
   error: string | null;
 }
 
-function useSpellMaps(data: GameData) {
+interface SpellMaps {
+  byId: Map<string, SpellMeta>;
+  byEntity: Map<string, SpellMeta>;
+}
+
+function useSpellMaps(data: GameData): SpellMaps {
   return useMemo(() => {
     const byId = new Map(data.spells.map((spell) => [spell.id, spell]));
     const byEntity = new Map<string, SpellMeta>();
@@ -42,142 +47,10 @@ function SpellIcon({ spell, data }: { spell?: SpellMeta; data: GameData }) {
   return icon ? <img className="mini-icon" src={icon} alt="" /> : <span className="mini-icon placeholder" />;
 }
 
-function triggerLabel(kind: ProjectileNode['triggerKind']): string {
+function triggerLabel(kind: 'timer' | 'hitWorld' | 'death'): string {
   if (kind === 'timer') return 'result.triggerTimer';
   if (kind === 'death') return 'result.triggerDeath';
   return 'result.triggerHitWorld';
-}
-
-/** Recursive cast-block view: called spells (modifiers, multicasts, projectiles) + projectiles. */
-function BlockView({
-  block,
-  depth,
-  data,
-  lang,
-  byId,
-  byEntity,
-  triggerKind,
-}: {
-  block: CastBlock;
-  depth: number;
-  data: GameData;
-  lang: Lang;
-  byId: Map<string, SpellMeta>;
-  byEntity: Map<string, SpellMeta>;
-  triggerKind?: ProjectileNode['triggerKind'];
-}) {
-  const actions = block.actions.map((action) => ({ ...action, spell: byId.get(action.id) }));
-  const modifiers = actions.filter((action) => action.spell?.type === 'modifier');
-  const empty = block.actions.length === 0 && block.projectiles.length === 0;
-
-  return (
-    <div className={`cast-block${depth > 0 ? ' nested' : ''}`}>
-      {depth > 0 && (
-        <div className="block-label">
-          ↳ {t(lang, 'result.payload')}
-          {triggerKind ? `（${t(lang, triggerLabel(triggerKind))}）` : ''}
-        </div>
-      )}
-
-      {actions.length > 0 && (
-        <div className="block-actions">
-          {actions.map((action, index) => (
-            <span
-              key={`${action.id}-${index}`}
-              className={`action-chip type-${action.spell?.type ?? 'unknown'}`}
-              title={action.id}
-            >
-              <SpellIcon spell={action.spell} data={data} />
-              <span className="chip-name">{spellName(action.spell, action.id, lang)}</span>
-              {action.deckIndex !== null && <span className="chip-slot">#{action.deckIndex + 1}</span>}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {modifiers.length > 0 && (
-        <div className="block-mods">
-          {t(lang, 'result.modifiers')}：{modifiers.map((action) => spellName(action.spell, action.id, lang)).join('、')}
-        </div>
-      )}
-
-      {block.projectiles.length > 0 && (
-        <div className="block-projectiles">
-          {block.projectiles.map((projectile, index) => {
-            const spell = byEntity.get(projectile.entity);
-            return (
-              <div className="proj-card" key={`${projectile.entity}-${index}`}>
-                <div className="proj-line">
-                  <SpellIcon spell={spell} data={data} />
-                  <span className="proj-name">{spellName(spell, entityLabel(projectile.entity), lang)}</span>
-                  <span className="proj-file">{entityLabel(projectile.entity)}</span>
-                  {projectile.trigger && (
-                    <span className="trigger-badge">
-                      {t(lang, triggerLabel(projectile.triggerKind))}
-                    </span>
-                  )}
-                </div>
-                {projectile.trigger && (
-                  <BlockView
-                    block={projectile.trigger}
-                    depth={depth + 1}
-                    data={data}
-                    lang={lang}
-                    byId={byId}
-                    byEntity={byEntity}
-                    triggerKind={projectile.triggerKind}
-                  />
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {empty && <div className="muted small">—</div>}
-    </div>
-  );
-}
-
-function countProjectiles(block: CastBlock): number {
-  let total = 0;
-  for (const node of block.projectiles) {
-    total += 1;
-    if (node.trigger) total += countProjectiles(node.trigger);
-  }
-  return total;
-}
-
-function Pile({ title, ids, data, lang, byId }: { title: string; ids: string[]; data: GameData; lang: Lang; byId: Map<string, SpellMeta> }) {
-  return (
-    <div className="pile">
-      <div className="pile-title">
-        {title} <span className="pile-count">{ids.length}</span>
-      </div>
-      <div className="pile-items">
-        {ids.length === 0 && <span className="muted small">{t(lang, 'result.empty')}</span>}
-        {ids.map((id, index) => {
-          const spell = byId.get(id);
-          return (
-            <span className="pile-chip" key={`${id}-${index}`} title={id}>
-              <SpellIcon spell={spell} data={data} />
-              <span>{spellName(spell, id, lang)}</span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// --- human readable cast steps ----------------------------------------------
-
-interface Step {
-  depth: number;
-  tone: string;
-  text: string;
-  spell?: SpellMeta;
-  deltas: string[];
 }
 
 const DELTA_FORMATS: Record<string, { label: string; kind: 'seconds' | 'number' | 'percent' | 'degrees' | 'multiplier' }> = {
@@ -229,104 +102,249 @@ function formatDeltas(delta: Record<string, number> | undefined, lang: Lang): st
   return out.slice(0, 4);
 }
 
-function buildSteps(shot: ShotResult, lang: Lang, byId: Map<string, SpellMeta>, byEntity: Map<string, SpellMeta>): Step[] {
-  const steps: Step[] = [];
-  let depth = 0;
-  let lastProjectile = '';
-  let draws = 0;
-  let calls = 0;
+// --- tree view ---------------------------------------------------------------
 
-  for (const event of shot.events as EngineEvent[]) {
-    switch (event.type) {
-      case 'shotStart':
-        steps.push({
-          depth: 0,
-          tone: 'start',
-          text: t(lang, 'event.shotStart', { mana: event.mana, frame: event.frame }),
-          deltas: [],
-        });
-        break;
-      case 'orderDeck':
-        steps.push({
-          depth: 0,
-          tone: 'deck',
-          text: event.shuffled ? t(lang, 'event.shuffle', { frame: shot.frame }) : t(lang, 'event.orderDeck'),
-          deltas: [],
-        });
-        break;
-      case 'draw':
-        if (event.ok === false) {
-          steps.push({ depth, tone: 'fail', text: t(lang, 'event.drawFail'), deltas: [] });
+const INDENT = 14;
+
+function TreeNodeView({
+  node,
+  depth,
+  data,
+  lang,
+  maps,
+}: {
+  node: CastTreeNode;
+  depth: number;
+  data: GameData;
+  lang: Lang;
+  maps: SpellMaps;
+}) {
+  const children = (extraDepth = 1) =>
+    node.children.map((child, index) => (
+      <TreeNodeView key={index} node={child} depth={depth + extraDepth} data={data} lang={lang} maps={maps} />
+    ));
+
+  switch (node.kind) {
+    case 'cast':
+      return <>{children(0)}</>;
+    case 'drawBlock':
+      return (
+        <div className="tree-node tree-drawblock" style={{ marginLeft: depth * INDENT }}>
+          <div className="tree-line">
+            <span className="tree-tag">抽取</span>
+            <span>
+              {node.count === 1 ? t(lang, 'tree.drawBlockOne') : t(lang, 'tree.drawBlock', { count: node.count })}
+            </span>
+          </div>
+          {children()}
+        </div>
+      );
+    case 'drawCard': {
+      const spell = node.spellId ? maps.byId.get(node.spellId) : undefined;
+      const name = spell ? spellName(spell, node.spellId ?? '', lang) : '';
+      const failed = node.ok === false;
+      return (
+        <div className="tree-node tree-drawcard" style={{ marginLeft: depth * INDENT }}>
+          <div className="tree-line">
+            <SpellIcon spell={spell} data={data} />
+            {node.spellId ? (
+              <span className={failed ? 'tree-failed' : ''}>
+                {failed
+                  ? t(lang, 'tree.drawCardFailed', { name })
+                  : t(lang, 'tree.drawCard', { name })}
+              </span>
+            ) : (
+              <span className="tree-failed">{t(lang, 'tree.drawCardEmpty')}</span>
+            )}
+          </div>
+          {children()}
+        </div>
+      );
+    }
+    case 'action': {
+      const spell = maps.byId.get(node.id);
+      const name = spellName(spell, node.id, lang);
+      const deltas = formatDeltas(node.delta, lang);
+      const directCall = node.deckIndex === null && !node.permanent;
+      return (
+        <div className="tree-node tree-action" style={{ marginLeft: depth * INDENT }}>
+          <div className="tree-line">
+            <SpellIcon spell={spell} data={data} />
+            <span className="tree-action-name">
+              {directCall ? t(lang, 'tree.actionCall', { name }) : t(lang, 'tree.action', { name })}
+            </span>
+            {spell && <span className={`tree-type type-${spell.type}`}>{t(lang, `type.${spell.type}`)}</span>}
+            {node.deckIndex !== null && <span className="tree-slot">#{node.deckIndex + 1}</span>}
+            {node.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
+            {node.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
+            {node.recursion !== null && <span className="tree-badge">{t(lang, 'tree.recursion', { n: node.recursion })}</span>}
+            {node.iteration !== null && <span className="tree-badge">{t(lang, 'tree.iteration', { n: node.iteration })}</span>}
+          </div>
+          {deltas.length > 0 && (
+            <div className="tree-deltas" style={{ marginLeft: 24 }}>
+              {deltas.map((delta, index) => (
+                <span className="tree-delta" key={index}>
+                  {delta}
+                </span>
+              ))}
+            </div>
+          )}
+          {node.projectiles.length > 0 && (
+            <div className="tree-projectiles" style={{ marginLeft: 24 }}>
+              {node.projectiles.map((entity, index) => {
+                const projectileSpell = maps.byEntity.get(entity);
+                return (
+                  <span className="tree-projectile" key={index}>
+                    <SpellIcon spell={projectileSpell} data={data} />
+                    {t(lang, 'tree.projectile', {
+                      name: spellName(projectileSpell, entityLabel(entity), lang),
+                    })}
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {children()}
+        </div>
+      );
+    }
+    case 'trigger': {
+      const projectileSpell = node.projectile ? maps.byEntity.get(node.projectile) : undefined;
+      return (
+        <div className="tree-node tree-trigger" style={{ marginLeft: depth * INDENT }}>
+          <div className="tree-line">
+            <span className="tree-tag trigger">{t(lang, triggerLabel(node.triggerKind))}</span>
+            <span>
+              {t(lang, 'tree.trigger', {
+                name: spellName(projectileSpell, node.projectile ? entityLabel(node.projectile) : '?', lang),
+                kind: t(lang, triggerLabel(node.triggerKind)),
+              })}
+            </span>
+          </div>
+          {children()}
+        </div>
+      );
+    }
+    default:
+      return null;
+  }
+}
+
+// --- narrative ----------------------------------------------------------------
+
+interface StoryStep {
+  depth: number;
+  tone: string;
+  text: string;
+  spell?: SpellMeta;
+  deltas: string[];
+}
+
+function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps): StoryStep[] {
+  const steps: StoryStep[] = [];
+
+  const walk = (node: CastTreeNode, depth: number, context: { parentAction?: string; inTrigger?: boolean }): void => {
+    switch (node.kind) {
+      case 'cast':
+        node.children.forEach((child) => walk(child, 0, context));
+        return;
+      case 'drawBlock': {
+        let text: string;
+        if (context.inTrigger) text = t(lang, 'tree.storyPayload', { count: node.count });
+        else if (context.parentAction) text = t(lang, 'tree.storyDrawByAction', { name: context.parentAction, count: node.count });
+        else text = node.count === 1 ? t(lang, 'tree.storyDrawOne') : t(lang, 'tree.storyDraw', { count: node.count });
+        steps.push({ depth, tone: 'draw', text, deltas: [] });
+        node.children.forEach((child) => walk(child, depth + 1, { ...context, parentAction: undefined, inTrigger: undefined }));
+        return;
+      }
+      case 'drawCard': {
+        const spell = node.spellId ? maps.byId.get(node.spellId) : undefined;
+        const name = spell ? spellName(spell, node.spellId ?? '', lang) : '';
+        if (node.ok === false) {
+          steps.push({ depth, tone: 'fail', text: t(lang, 'tree.storyCardFailed', { name }), spell, deltas: [] });
+        } else if (node.spellId) {
+          steps.push({ depth, tone: 'draw', text: t(lang, 'tree.storyCard', { name }), spell, deltas: [] });
         } else {
-          draws += 1;
+          steps.push({ depth, tone: 'fail', text: t(lang, 'tree.storyCardEmpty'), deltas: [] });
         }
-        break;
+        node.children.forEach((child) => walk(child, depth + 1, context));
+        return;
+      }
       case 'action': {
-        calls += 1;
-        const spell = byId.get(event.id);
+        const spell = maps.byId.get(node.id);
+        const name = spellName(spell, node.id, lang);
+        const direct = node.deckIndex === null && !node.permanent;
+        let text = direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name });
+        if (node.dontDraw) text += `（${t(lang, 'tree.dontDraw')}）`;
+        if (node.permanent) text += `（${t(lang, 'tree.permanent')}）`;
+        if (node.recursion !== null) text += ` ${t(lang, 'tree.recursion', { n: node.recursion })}`;
+        if (node.iteration !== null) text += ` ${t(lang, 'tree.iteration', { n: node.iteration })}`;
         steps.push({
           depth,
-          tone: 'action',
-          text: t(lang, 'event.action', { name: spellName(spell, event.id, lang) }),
+          tone: direct ? 'call' : 'action',
+          text,
           spell,
-          deltas: formatDeltas(event.delta, lang),
+          deltas: formatDeltas(node.delta, lang),
         });
-        break;
+        for (const entity of node.projectiles) {
+          const projectileSpell = maps.byEntity.get(entity);
+          steps.push({
+            depth: depth + 1,
+            tone: 'projectile',
+            text: t(lang, 'tree.storyProjectile', {
+              name: spellName(projectileSpell, entityLabel(entity), lang),
+            }),
+            spell: projectileSpell,
+            deltas: [],
+          });
+        }
+        node.children.forEach((child) => walk(child, depth + 1, { parentAction: name }));
+        return;
       }
-      case 'projectileBegin': {
-        const spell = byEntity.get(event.entity);
-        lastProjectile = spellName(spell, entityLabel(event.entity), lang);
-        steps.push({
-          depth,
-          tone: 'projectile',
-          text: t(lang, 'event.projectile', { name: lastProjectile }),
-          spell,
-          deltas: [],
-        });
-        break;
-      }
-      case 'triggerBegin':
+      case 'trigger': {
+        const projectileSpell = node.projectile ? maps.byEntity.get(node.projectile) : undefined;
         steps.push({
           depth,
           tone: 'trigger',
-          text: t(lang, 'step.trigger', {
-            name: lastProjectile,
-            kind: t(lang, triggerLabel(event.kind)),
+          text: t(lang, 'tree.storyTrigger', {
+            name: spellName(projectileSpell, node.projectile ? entityLabel(node.projectile) : '?', lang),
+            kind: t(lang, triggerLabel(node.triggerKind)),
           }),
           deltas: [],
         });
-        depth += 1;
-        break;
-      case 'triggerEnd':
-        depth = Math.max(0, depth - 1);
-        steps.push({ depth, tone: 'trigger', text: t(lang, 'step.triggerEnd'), deltas: [] });
-        break;
-      case 'reload':
-        steps.push({
-          depth: 0,
-          tone: 'reload',
-          text: t(lang, 'event.reload', { seconds: formatFramesAsSeconds(event.timeFrames) }),
-          deltas: [],
-        });
-        break;
-      case 'shotEnd':
-        steps.push({
-          depth: 0,
-          tone: 'end',
-          text: t(lang, 'event.shotEnd', {
-            delay: formatFramesAsSeconds(event.castDelayFrames),
-            recharge: formatFramesAsSeconds(event.reloadFrames),
-          }),
-          deltas: [],
-        });
-        break;
-      case 'notEnoughMana':
-        break;
+        node.children.forEach((child) => walk(child, depth + 1, { inTrigger: true }));
+        return;
+      }
       default:
-        break;
+        return;
     }
-  }
-  return [{ depth: 0, tone: 'summary', text: t(lang, 'step.summary', { draws, calls }), deltas: [] }, ...steps];
+  };
+
+  walk(tree, 0, {});
+  return steps;
+}
+
+function collectStats(tree: CastTreeNode, maps: SpellMaps) {
+  let actions = 0;
+  let projectiles = 0;
+  const modifiers = new Map<string, number>();
+  const projectilesByEntity = new Map<string, number>();
+  const walk = (node: CastTreeNode) => {
+    if (node.kind === 'action') {
+      actions += 1;
+      for (const entity of node.projectiles) {
+        projectiles += 1;
+        projectilesByEntity.set(entity, (projectilesByEntity.get(entity) ?? 0) + 1);
+      }
+    }
+    if (node.kind === 'action') {
+      const spell = maps.byId.get(node.id);
+      if (spell?.type === 'modifier') modifiers.set(node.id, (modifiers.get(node.id) ?? 0) + 1);
+    }
+    node.children.forEach(walk);
+  };
+  walk(tree);
+  return { actions, projectiles, modifiers: [...modifiers.entries()], projectilesByEntity };
 }
 
 const STATE_ROWS: { key: string; format: 'seconds' | 'percent' | 'multiplier' | 'degrees' | 'number' }[] = [
@@ -355,10 +373,32 @@ function stateValue(format: (typeof STATE_ROWS)[number]['format'], value: number
   }
 }
 
+function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; data: GameData; lang: Lang; maps: SpellMaps }) {
+  return (
+    <div className="pile">
+      <div className="pile-title">
+        {title} <span className="pile-count">{ids.length}</span>
+      </div>
+      <div className="pile-items">
+        {ids.length === 0 && <span className="muted small">{t(lang, 'result.empty')}</span>}
+        {ids.map((id, index) => {
+          const spell = maps.byId.get(id);
+          return (
+            <span className="pile-chip" key={`${id}-${index}`} title={id}>
+              <SpellIcon spell={spell} data={data} />
+              <span>{spellName(spell, id, lang)}</span>
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ShotCard({ shot, index, data, lang }: { shot: ShotResult; index: number; data: GameData; lang: Lang }) {
-  const { byId, byEntity } = useSpellMaps(data);
-  const projectiles = countProjectiles(shot.block);
-  const steps = useMemo(() => buildSteps(shot, lang, byId, byEntity), [shot, lang, byId, byEntity]);
+  const maps = useSpellMaps(data);
+  const stats = useMemo(() => collectStats(shot.tree, maps), [shot.tree, maps]);
+  const story = useMemo(() => buildStory(shot.tree, lang, maps), [shot.tree, lang, maps]);
   const stateRows = STATE_ROWS.map((row) => {
     const value = shot.castState[row.key];
     return typeof value === 'number' && value !== 0 ? { ...row, value } : null;
@@ -376,7 +416,7 @@ function ShotCard({ shot, index, data, lang }: { shot: ShotResult; index: number
           {t(lang, 'result.recharge')} {formatFramesAsSeconds(shot.reloadFrames)}s
         </span>
         <span className="shot-stat">
-          {t(lang, 'result.projectiles')} {projectiles}
+          {t(lang, 'result.projectiles')} {stats.projectiles}
         </span>
         {shot.reloaded && <span className="badge reloaded">{t(lang, 'result.reloaded')}</span>}
       </header>
@@ -384,29 +424,38 @@ function ShotCard({ shot, index, data, lang }: { shot: ShotResult; index: number
       <div className="shot-columns">
         <section className="shot-tree">
           <h4>{t(lang, 'result.tree')}</h4>
-          {projectiles === 0 && shot.block.actions.length === 0 ? (
+          {stats.modifiers.length > 0 && (
+            <div className="tree-mods">
+              {t(lang, 'result.modifiers')}：
+              {stats.modifiers
+                .map(([id, count]) => {
+                  const spell = maps.byId.get(id);
+                  return `${spellName(spell, id, lang)} ×${count}`;
+                })
+                .join('、')}
+            </div>
+          )}
+          {stats.projectiles === 0 && stats.actions === 0 ? (
             <p className="muted">{t(lang, 'result.noProjectiles')}</p>
           ) : (
-            <BlockView block={shot.block} depth={0} data={data} lang={lang} byId={byId} byEntity={byEntity} />
+            <div className="tree-root">
+              <TreeNodeView node={shot.tree} depth={0} data={data} lang={lang} maps={maps} />
+            </div>
           )}
         </section>
         <section className="piles">
           <h4>{t(lang, 'result.piles')}</h4>
-          <Pile title={t(lang, 'result.pileDeck')} ids={shot.deck} data={data} lang={lang} byId={byId} />
-          <Pile title={t(lang, 'result.pileHand')} ids={shot.hand} data={data} lang={lang} byId={byId} />
-          <Pile title={t(lang, 'result.pileDiscard')} ids={shot.discarded} data={data} lang={lang} byId={byId} />
+          <Pile title={t(lang, 'result.pileDeck')} ids={shot.deck} data={data} lang={lang} maps={maps} />
+          <Pile title={t(lang, 'result.pileHand')} ids={shot.hand} data={data} lang={lang} maps={maps} />
+          <Pile title={t(lang, 'result.pileDiscard')} ids={shot.discarded} data={data} lang={lang} maps={maps} />
         </section>
       </div>
 
       <section className="shot-steps">
         <h4>{t(lang, 'result.steps')}</h4>
         <ol className="step-list">
-          {steps.map((step, stepIndex) => (
-            <li
-              key={stepIndex}
-              className={`step step-${step.tone}`}
-              style={{ marginLeft: step.depth * 18 }}
-            >
+          {story.map((step, stepIndex) => (
+            <li key={stepIndex} className={`step step-${step.tone}`} style={{ marginLeft: step.depth * INDENT }}>
               {step.spell && <SpellIcon spell={step.spell} data={data} />}
               <span className="step-text">{step.text}</span>
               {step.deltas.length > 0 && (
@@ -426,7 +475,7 @@ function ShotCard({ shot, index, data, lang }: { shot: ShotResult; index: number
       <details className="shot-details">
         <summary>{t(lang, 'result.rawEvents')}</summary>
         <ol className="event-list">
-          {shot.events.map((event, eventIndex) => (
+          {shot.events.map((event: EngineEvent, eventIndex: number) => (
             <li key={eventIndex} className={`event event-${event.type}`}>
               {JSON.stringify(event)}
             </li>

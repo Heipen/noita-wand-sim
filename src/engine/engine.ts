@@ -1,5 +1,5 @@
 import { lauxlib, lua, lualib, to_jsstring, to_luastring } from 'fengari';
-import { buildCastBlock } from './castTree';
+import { buildCastBlock, buildCastTree } from './castTree';
 import { NoitaRng } from './rng';
 import { ENGINE_STUBS, LUA_HOOKS, LUA_PRELUDE, LUA_PREPARE, toLuaLiteral } from './shimLua';
 import { loadEngineScripts } from './sources';
@@ -52,6 +52,56 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
           cardsDrawn: Number(entry[3]),
           ok: entry[4] === undefined ? null : entry[4] === true,
         });
+        break;
+      case 'drawBlockBegin':
+        events.push({
+          type: 'drawBlockBegin',
+          count: Number(entry[1]),
+          instantReload: entry[2] === true,
+        });
+        break;
+      case 'drawBlockEnd':
+        events.push({ type: 'drawBlockEnd' });
+        break;
+      case 'drawCard':
+        events.push({
+          type: 'drawCard',
+          spellId: entry[1] === undefined ? null : String(entry[1]),
+          deckBefore: Number(entry[2]),
+          deckAfter: Number(entry[3]),
+          ok: entry[4] === undefined ? null : entry[4] === true,
+        });
+        break;
+      case 'playAction':
+        events.push({
+          type: 'playAction',
+          id: String(entry[1]),
+          deckIndex: entry[2] === undefined ? null : Number(entry[2]),
+        });
+        break;
+      case 'callAction': {
+        const deltaRaw = entry[6];
+        let delta: Record<string, number> | undefined;
+        if (deltaRaw && typeof deltaRaw === 'object') {
+          const parsed: Record<string, number> = {};
+          for (const [key, value] of Object.entries(deltaRaw as Record<string, unknown>)) {
+            if (typeof value === 'number' && value !== 0) parsed[key] = value;
+          }
+          if (Object.keys(parsed).length > 0) delta = parsed;
+        }
+        events.push({
+          type: 'callAction',
+          id: String(entry[1]),
+          recursion: entry[2] === undefined ? null : Number(entry[2]),
+          iteration: entry[3] === undefined ? null : Number(entry[3]),
+          dontDraw: entry[4] === true,
+          permanent: entry[5] === true,
+          delta,
+        });
+        break;
+      }
+      case 'callActionEnd':
+        events.push({ type: 'callActionEnd' });
         break;
       case 'action': {
         const deltaRaw = entry[3];
@@ -222,6 +272,7 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
     block.castState = snapshot.castState;
     const shot: ShotResult = {
       block,
+      tree: buildCastTree(events),
       events,
       castState: snapshot.castState,
       manaBefore: mana,

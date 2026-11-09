@@ -167,6 +167,50 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(payload?.actions[0].delta?.fire_rate_wait).toBe(100);
   });
 
+  it('builds the evaluation tree (draw block → card → action → nested draws)', () => {
+    const shot = engine.simulate(wand(['LIGHT_BULLET_TRIGGER', 'BOMB'])).shots[0];
+    expect(shot.tree.kind).toBe('cast');
+    const block = shot.tree.children[0];
+    expect(block.kind).toBe('drawBlock');
+    if (block.kind !== 'drawBlock') throw new Error('expected drawBlock');
+    expect(block.count).toBe(1);
+    const card = block.children[0];
+    expect(card.kind).toBe('drawCard');
+    if (card.kind !== 'drawCard') throw new Error('expected drawCard');
+    expect(card.spellId).toBe('LIGHT_BULLET_TRIGGER');
+    const action = card.children[0];
+    expect(action.kind).toBe('action');
+    if (action.kind !== 'action') throw new Error('expected action');
+    expect(action.projectiles).toEqual(['data/entities/projectiles/deck/light_bullet.xml']);
+    const trigger = action.children.find((child) => child.kind === 'trigger');
+    expect(trigger?.kind).toBe('trigger');
+    if (trigger?.kind !== 'trigger') throw new Error('expected trigger');
+    const payloadCard = trigger.children[0];
+    expect(payloadCard.kind).toBe('drawBlock');
+  });
+
+  it('matches the wiki preload example: D10 + DAMAGE + LIGHT_BULLET = 11 damage modifiers', () => {
+    const shot = engine.simulate(wand(['DIVIDE_10', 'DAMAGE', 'LIGHT_BULLET']), { mana: 10000 }).shots[0];
+    let damageCalls = 0;
+    let bulletCalls = 0;
+    let dontDraw = 0;
+    let projectiles = 0;
+    const walk = (node: typeof shot.tree) => {
+      if (node.kind === 'action') {
+        if (node.id === 'DAMAGE') damageCalls += 1;
+        if (node.id === 'LIGHT_BULLET') bulletCalls += 1;
+        if (node.dontDraw) dontDraw += 1;
+        projectiles += node.projectiles.length;
+      }
+      node.children.forEach(walk);
+    };
+    walk(shot.tree);
+    expect(damageCalls).toBe(11);
+    expect(bulletCalls).toBe(1);
+    expect(dontDraw).toBe(1);
+    expect(projectiles).toBe(1);
+  });
+
   it('shuffles deterministically for the same frame/world seed', () => {
     const shuffled = wand(['LIGHT_BULLET', 'BOMB', 'CHAINSAW', 'DAMAGE', 'SPARK_BOLT'], {
       shuffle_deck_when_empty: true,

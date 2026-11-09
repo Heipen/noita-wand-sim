@@ -4,6 +4,20 @@ export type EngineEvent =
   | { type: 'shotStart'; mana: number; frame: number }
   | { type: 'orderDeck'; shuffled: boolean }
   | { type: 'draw'; deckBefore: number; deckAfter: number; cardsDrawn: number; ok: boolean | null }
+  | { type: 'drawBlockBegin'; count: number; instantReload: boolean }
+  | { type: 'drawBlockEnd' }
+  | { type: 'drawCard'; spellId: string | null; deckBefore: number; deckAfter: number; ok: boolean | null }
+  | { type: 'playAction'; id: string; deckIndex: number | null }
+  | {
+      type: 'callAction';
+      id: string;
+      recursion: number | null;
+      iteration: number | null;
+      dontDraw: boolean;
+      permanent: boolean;
+      delta?: Record<string, number>;
+    }
+  | { type: 'callActionEnd' }
   | { type: 'action'; id: string; deckIndex?: number | null; delta?: Record<string, number> }
   | { type: 'projectileBegin'; entity: string }
   | { type: 'projectileEnd' }
@@ -19,6 +33,37 @@ export interface ActionCallNode {
   /** Shot-state fields this action changed (after - before), for human-readable explanations. */
   delta?: Record<string, number>;
 }
+
+/** Evaluation tree node: the wand draw → card draw → action call hierarchy. */
+export type CastTreeNode =
+  | { kind: 'cast'; children: CastTreeNode[] }
+  | { kind: 'drawBlock'; count: number; instantReload: boolean; children: CastTreeNode[] }
+  | {
+      kind: 'drawCard';
+      spellId: string | null;
+      ok: boolean | null;
+      deckBefore: number;
+      deckAfter: number;
+      children: CastTreeNode[];
+    }
+  | {
+      kind: 'action';
+      id: string;
+      deckIndex: number | null;
+      recursion: number | null;
+      iteration: number | null;
+      dontDraw: boolean;
+      permanent: boolean;
+      delta?: Record<string, number>;
+      projectiles: string[];
+      children: CastTreeNode[];
+    }
+  | {
+      kind: 'trigger';
+      triggerKind: 'timer' | 'hitWorld' | 'death';
+      projectile: string | null;
+      children: CastTreeNode[];
+    };
 
 export interface ProjectileNode {
   entity: string;
@@ -37,6 +82,8 @@ export interface CastBlock {
 export interface ShotResult {
   /** One cast block per wand click. */
   block: CastBlock;
+  /** Evaluation tree: wand draws → drawn cards → called actions → nested draws/triggers. */
+  tree: CastTreeNode;
   /** Raw ordered event log (for detailed UI / debugging). */
   events: EngineEvent[];
   /** Root shot state after the cast (cast delay, damage modifiers, spread, ...). */

@@ -270,31 +270,72 @@ local function __capture_shot_state()
   return out
 end
 
-function __install_hooks()
-  local orig_play_action = play_action
-  function play_action(action)
-    local before = __capture_shot_state()
-    local eventIndex = #__events + 1
-    __ev('action', action.id, action.deck_index)
-    local result = orig_play_action(action)
-    local after = __capture_shot_state()
-    local delta = {}
-    for i = 1, #__delta_fields do
-      local field = __delta_fields[i]
-      if after[field] ~= before[field] then
-        delta[field] = after[field] - before[field]
-      end
+local function __state_delta(before)
+  local after = __capture_shot_state()
+  local delta = {}
+  for i = 1, #__delta_fields do
+    local field = __delta_fields[i]
+    if after[field] ~= before[field] then
+      delta[field] = after[field] - before[field]
     end
-    __events[eventIndex][3] = delta
-    return result
+  end
+  return delta
+end
+
+function __install_hooks()
+  -- 1) wrap every spell's action closure: captures recursion/iteration, "don't draw"
+  --    state, permanent-card flag and the exact shot-state delta it caused.
+  for i = 1, #actions do
+    local action = actions[i]
+    local original = action.action
+    action.action = function(recursion_level, iteration)
+      local eventIndex = #__events + 1
+      local before = __capture_shot_state()
+      __ev(
+        'callAction',
+        action.id,
+        recursion_level,
+        iteration,
+        dont_draw_actions == true,
+        playing_permanent_card == true
+      )
+      local result = original(recursion_level, iteration)
+      __events[eventIndex][6] = __state_delta(before)
+      __ev('callActionEnd')
+      return result
+    end
   end
 
+  -- 2) draw machinery: draw block begin/end + one event per draw attempt.
   local orig_draw_action = draw_action
   function draw_action(instant_reload_if_empty)
     local before = #deck
+    local top = nil
+    if deck[1] then top = deck[1].id end
     local ok = orig_draw_action(instant_reload_if_empty)
+    __ev('drawCard', top, before, #deck, ok)
     __ev('draw', before, #deck, state_cards_drawn, ok)
     return ok
+  end
+
+  local orig_draw_actions = draw_actions
+  function draw_actions(how_many, instant_reload_if_empty)
+    __ev('drawBlockBegin', how_many, instant_reload_if_empty == true)
+    local result = orig_draw_actions(how_many, instant_reload_if_empty)
+    __ev('drawBlockEnd')
+    return result
+  end
+
+  -- 3) playing a card: which card was drawn, then the action itself.
+  local orig_play_action = play_action
+  function play_action(action)
+    local before = __capture_shot_state()
+    __ev('playAction', action.id, action.deck_index)
+    local actionIndex = #__events + 1
+    __ev('action', action.id, action.deck_index)
+    local result = orig_play_action(action)
+    __events[actionIndex][3] = __state_delta(before)
+    return result
   end
 
   local orig_order_deck = order_deck

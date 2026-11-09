@@ -86,6 +86,17 @@ export const PRESETS: WandPreset[] = [
     }),
   },
   {
+    id: 'divide-ten-damage',
+    nameZh: '一分为十 + 伤害增强',
+    nameEn: 'Divide by 10 + Damage Plus',
+    wand: makeWand('一分为十 + 伤害增强', ['DIVIDE_10', 'DAMAGE', 'LIGHT_BULLET'], {
+      castDelayFrames: 0,
+      rechargeFrames: 40,
+      manaMax: 20000,
+      manaChargeSpeed: 2000,
+    }),
+  },
+  {
     id: 'refresh-ring',
     nameZh: '刷新环循环',
     nameEn: 'Wand refresh loop',

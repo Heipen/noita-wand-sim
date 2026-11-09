@@ -117,7 +117,7 @@ console.log('✓ cast tree:', (await evaluate("document.querySelector('.shot-tre
 if (!shotText.includes('第 1 次施法')) throw new Error('missing shot header');
 if (!shotText.includes('投射物 2')) throw new Error('expected 2 projectiles, got: ' + shotText);
 const treeText = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
-for (const needle of ['火花弹', '炸弹', '命中触发']) {
+for (const needle of ['抽到「触发火花弹」', '开启命中触发', '抽到「炸弹」', '生成投射物']) {
   if (!treeText.includes(needle)) throw new Error(`cast tree missing ${needle}: ${treeText}`);
 }
 
@@ -129,17 +129,13 @@ console.log('✓ click-to-add works, filled slots:', await evaluate("document.qu
 
 // 3b) a modifier is visible in the cast tree + explained in the casting steps
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'double-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor(
-  "(document.querySelector('.shot-tree')?.innerText || '').includes('伤害增强') && document.querySelector('.block-mods')?.innerText",
-  60000,
-  'modifier in cast tree',
-);
-const modifiersText = await evaluate("document.querySelector('.block-mods')?.innerText || ''");
-if (!modifiersText.includes('伤害增强')) throw new Error('missing modifier summary: ' + modifiersText);
+await waitFor("(document.querySelector('.tree-mods')?.innerText || '').includes('伤害增强')", 60000, 'modifier in cast tree');
+const modifiersText = await evaluate("document.querySelector('.tree-mods')?.innerText || ''");
+if (!modifiersText.includes('伤害增强 ×1')) throw new Error('missing modifier count: ' + modifiersText);
 const stepsText = await evaluate("document.querySelector('.step-list')?.innerText || ''");
-if (!stepsText.includes('施法过程') && !stepsText.includes('本次施法')) throw new Error('missing human steps: ' + stepsText);
+if (!stepsText.includes('抽取')) throw new Error('missing human steps: ' + stepsText);
 if (!stepsText.includes('投射物伤害')) throw new Error('missing modifier delta explanation: ' + stepsText);
-if (!stepsText.includes('执行 伤害增强')) throw new Error('missing action explanation: ' + stepsText);
+if (!stepsText.includes('执行「伤害增强」')) throw new Error('missing action explanation: ' + stepsText);
 console.log('✓ modifier shown in tree + explained in steps');
 
 // 4) divide-by-10 preset => 800 projectiles
@@ -153,6 +149,15 @@ if (!huge.includes('投射物 800')) throw new Error('expected 800 projectiles, 
 const query = await evaluate('location.search');
 if (!query.includes('DIVIDE_10')) throw new Error('share URL missing DIVIDE_10: ' + query);
 console.log('✓ divide-by-10 chain:', huge.replace(/\n/g, ' | '));
+
+// 4b) wiki example: D10 + DAMAGE + LIGHT_BULLET => 11 damage modifiers, one don't-draw copy
+await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await waitFor("(document.querySelector('.tree-mods')?.innerText || '').includes('×11')", 60000, 'wiki example modifiers');
+const wikiTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
+if (!wikiTree.includes('禁抽')) throw new Error('tree missing the don\'t-draw copy: ' + wikiTree.slice(0, 400));
+const wikiStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
+if (!wikiStory.includes('牌库已空')) throw new Error('story missing empty-deck draws: ' + wikiStory.slice(0, 400));
+console.log('✓ wiki preload example rendered: 11× 伤害增强, 1 禁抽, empty-deck draws');
 
 // 5) in-game style tooltip on hover
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="COLOUR_RAINBOW"]'); el.scrollIntoView({ block: 'center' }); return true; })()`);
@@ -192,16 +197,23 @@ await evaluate("document.querySelector('.lang-switch').click()");
 await sleep(300);
 console.log('✓ i18n toggle works');
 
-// 8) screenshot: a wand with a modifier, scrolled to the cast result
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'double-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("(document.querySelector('.block-mods')?.innerText || '').includes('伤害增强')", 60000, 'double-damage preset');
-await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
+// 8) screenshots: the wiki preload example — tree view and the narrative below it
+await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await waitFor("(document.querySelector('.tree-mods')?.innerText || '').includes('×11')", 60000, 'wiki example preset');
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });
 await sleep(300);
 await evaluate("document.querySelector('.cast-result').scrollIntoView({ block: 'start' }); true");
 await sleep(400);
 const screenshot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(SHOT, Buffer.from(screenshot.data, 'base64'));
 console.log('✓ screenshot:', SHOT);
+
+await evaluate("document.querySelector('.shot-steps')?.scrollIntoView({ block: 'start' }); true");
+await sleep(400);
+const stepsShot = await send('Page.captureScreenshot', { format: 'png' });
+const stepsPath = SHOT.replace(/\.png$/, '-steps.png');
+writeFileSync(stepsPath, Buffer.from(stepsShot.data, 'base64'));
+console.log('✓ screenshot (narrative):', stepsPath);
 
 if (consoleErrors.length > 0) console.warn('browser errors:', consoleErrors.slice(0, 10));
 else console.log('✓ no browser console errors');
