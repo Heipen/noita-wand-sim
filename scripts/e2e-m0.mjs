@@ -127,8 +127,10 @@ const cards = await evaluate("document.querySelectorAll('.spell-card').length");
 const iconsWithSrc = await evaluate(
   "Array.from(document.querySelectorAll('.spell-card img')).filter((img) => img.getAttribute('src')).length",
 );
-const iconsLoaded = await evaluate(
-  "Array.from(document.querySelectorAll('.spell-card img')).filter((img) => img.complete && img.naturalWidth > 0).length",
+const iconsLoaded = await waitFor(
+  "(Array.from(document.querySelectorAll('.spell-card img')).filter((img) => img.complete && img.naturalWidth > 0).length >= 10) && Array.from(document.querySelectorAll('.spell-card img')).filter((img) => img.complete && img.naturalWidth > 0).length",
+  30000,
+  'icons loaded',
 );
 console.log(`✓ ${cards} spell cards, ${iconsWithSrc} icons referenced, ${iconsLoaded} loaded (lazy)`);
 if (cards < 400) throw new Error('expected >= 400 cards, got ' + cards);
