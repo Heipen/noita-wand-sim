@@ -104,7 +104,11 @@ await send('Runtime.enable');
 await send('DOM.enable');
 
 // 0) start from a clean browser profile: drop the cached IndexedDB import
-await waitFor("document.readyState === 'complete'", 30000, 'page ready');
+await waitFor(
+  "document.readyState === 'complete' && location.href !== 'about:blank'",
+  60000,
+  'page navigation',
+);
 await evaluate(
   "new Promise((resolve) => { const req = indexedDB.deleteDatabase('noita-wand-sim'); req.onsuccess = req.onerror = req.onblocked = () => resolve(true); })",
   true,
