@@ -250,11 +250,43 @@ function print_error() end
 
 /** Wraps the game's own gun.lua functions to emit richer events. */
 export const LUA_HOOKS = `
+-- shot-state fields whose change is reported per action (human-readable explanations)
+local __delta_fields = {
+  'fire_rate_wait', 'reload_time',
+  'damage_projectile_add', 'damage_explosion_add', 'damage_melee_add',
+  'damage_electricity_add', 'damage_fire_add', 'damage_ice_add',
+  'damage_slice_add', 'damage_healing_add', 'damage_curse_add', 'damage_drill_add',
+  'damage_critical_chance', 'damage_critical_multiplier',
+  'spread_degrees', 'speed_multiplier', 'lifetime_add', 'explosion_radius',
+  'bounces', 'screenshake', 'recoil', 'action_draw_many_count',
+}
+
+local function __capture_shot_state()
+  local out = {}
+  for i = 1, #__delta_fields do
+    local field = __delta_fields[i]
+    out[field] = c[field] or 0
+  end
+  return out
+end
+
 function __install_hooks()
   local orig_play_action = play_action
   function play_action(action)
+    local before = __capture_shot_state()
+    local eventIndex = #__events + 1
     __ev('action', action.id, action.deck_index)
-    return orig_play_action(action)
+    local result = orig_play_action(action)
+    local after = __capture_shot_state()
+    local delta = {}
+    for i = 1, #__delta_fields do
+      local field = __delta_fields[i]
+      if after[field] ~= before[field] then
+        delta[field] = after[field] - before[field]
+      end
+    end
+    __events[eventIndex][3] = delta
+    return result
   end
 
   local orig_draw_action = draw_action
@@ -280,8 +312,7 @@ function __install_hooks()
   local orig_draw_actions_for_shot = _draw_actions_for_shot
   function _draw_actions_for_shot(can_reload_at_end)
     orig_draw_actions_for_shot(can_reload_at_end)
-    local state = __last_state or {}
-    __ev('shotEnd', state.fire_rate_wait or 0, state.reload_time or 0)
+    __ev('shotEnd', (c and c.fire_rate_wait) or 0, current_reload_time or 0)
   end
 end
 `;

@@ -7,13 +7,16 @@ import type { CastBlock, EngineEvent, ProjectileNode } from './types';
  * `castState` is filled in by the engine from the root shot state snapshot.
  */
 export function buildCastBlock(events: EngineEvent[]): CastBlock {
-  const root: CastBlock = { projectiles: [], castState: {} };
+  const root: CastBlock = { projectiles: [], actions: [], castState: {} };
   const stack: CastBlock[] = [root];
   const lastProjectile = new Map<CastBlock, ProjectileNode>();
 
   for (const event of events) {
     const current = stack[stack.length - 1];
     switch (event.type) {
+      case 'action':
+        current.actions.push({ id: event.id, deckIndex: event.deckIndex ?? null, delta: event.delta });
+        break;
       case 'projectileBegin': {
         const node: ProjectileNode = { entity: event.entity };
         current.projectiles.push(node);
@@ -22,7 +25,7 @@ export function buildCastBlock(events: EngineEvent[]): CastBlock {
       }
       case 'triggerBegin': {
         const carrier = lastProjectile.get(current);
-        const block: CastBlock = { projectiles: [], castState: {} };
+        const block: CastBlock = { projectiles: [], actions: [], castState: {} };
         if (carrier) {
           carrier.trigger = block;
           carrier.triggerKind = event.kind;

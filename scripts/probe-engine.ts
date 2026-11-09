@@ -27,6 +27,10 @@ const wand = (spells: (string | null)[], extra: Partial<WandConfig> = {}): WandC
 const draw = (shot: ReturnType<typeof engine.simulate>['shots'][number]) => {
   const walk = (block: typeof shot.block, depth = 0): string[] => {
     const lines: string[] = [];
+    const actions = block.actions
+      .map((action) => `${action.id}${action.deckIndex !== null ? `#${action.deckIndex + 1}` : ''}${action.delta ? ` ${JSON.stringify(action.delta)}` : ''}`)
+      .join(', ');
+    if (actions) lines.push(`${'  '.repeat(depth)}actions: ${actions}`);
     for (const projectile of block.projectiles) {
       lines.push(`${'  '.repeat(depth)}projectile ${projectile.entity}`);
       if (projectile.trigger) lines.push(...walk(projectile.trigger, depth + 1));

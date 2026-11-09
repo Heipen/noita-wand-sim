@@ -153,6 +153,20 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(result.shots.map((shot) => shot.reloaded)).toEqual([false, false, true]);
   });
 
+  it('records which spells were called in each cast block (modifiers included)', () => {
+    const shot = engine.simulate(wand(['DAMAGE', 'LIGHT_BULLET'])).shots[0];
+    expect(shot.block.actions.map((action) => action.id)).toEqual(['DAMAGE', 'LIGHT_BULLET']);
+    expect(shot.block.actions[0].delta?.damage_projectile_add).toBe(0.4);
+    expect(shot.block.actions[0].deckIndex).toBe(0);
+    expect(shot.block.actions[1].delta?.fire_rate_wait).toBe(3);
+
+    const triggerShot = engine.simulate(wand(['LIGHT_BULLET_TRIGGER', 'BOMB'])).shots[0];
+    expect(triggerShot.block.actions.map((action) => action.id)).toEqual(['LIGHT_BULLET_TRIGGER']);
+    const payload = triggerShot.block.projectiles[0].trigger;
+    expect(payload?.actions.map((action) => action.id)).toEqual(['BOMB']);
+    expect(payload?.actions[0].delta?.fire_rate_wait).toBe(100);
+  });
+
   it('shuffles deterministically for the same frame/world seed', () => {
     const shuffled = wand(['LIGHT_BULLET', 'BOMB', 'CHAINSAW', 'DAMAGE', 'SPARK_BOLT'], {
       shuffle_deck_when_empty: true,

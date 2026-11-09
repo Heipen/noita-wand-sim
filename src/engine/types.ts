@@ -4,7 +4,7 @@ export type EngineEvent =
   | { type: 'shotStart'; mana: number; frame: number }
   | { type: 'orderDeck'; shuffled: boolean }
   | { type: 'draw'; deckBefore: number; deckAfter: number; cardsDrawn: number; ok: boolean | null }
-  | { type: 'action'; id: string; deckIndex?: number | null }
+  | { type: 'action'; id: string; deckIndex?: number | null; delta?: Record<string, number> }
   | { type: 'projectileBegin'; entity: string }
   | { type: 'projectileEnd' }
   | { type: 'triggerBegin'; kind: 'timer' | 'hitWorld' | 'death'; delayFrames?: number }
@@ -12,6 +12,13 @@ export type EngineEvent =
   | { type: 'notEnoughMana' }
   | { type: 'reload'; timeFrames: number }
   | { type: 'shotEnd'; castDelayFrames: number; reloadFrames: number };
+
+export interface ActionCallNode {
+  id: string;
+  deckIndex: number | null;
+  /** Shot-state fields this action changed (after - before), for human-readable explanations. */
+  delta?: Record<string, number>;
+}
 
 export interface ProjectileNode {
   entity: string;
@@ -22,6 +29,8 @@ export interface ProjectileNode {
 
 export interface CastBlock {
   projectiles: ProjectileNode[];
+  /** Spells executed in this cast block, in call order. */
+  actions: ActionCallNode[];
   castState: Record<string, number | string>;
 }
 

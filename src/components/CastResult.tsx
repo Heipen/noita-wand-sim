@@ -15,20 +15,26 @@ interface Props {
   error: string | null;
 }
 
-function useEntityMap(data: GameData): Map<string, SpellMeta> {
+function useSpellMaps(data: GameData) {
   return useMemo(() => {
-    const map = new Map<string, SpellMeta>();
+    const byId = new Map(data.spells.map((spell) => [spell.id, spell]));
+    const byEntity = new Map<string, SpellMeta>();
     for (const spell of data.spells) {
       for (const entity of spell.relatedProjectiles) {
-        if (!map.has(entity)) map.set(entity, spell);
+        if (!byEntity.has(entity)) byEntity.set(entity, spell);
       }
     }
-    return map;
+    return { byId, byEntity };
   }, [data.spells]);
 }
 
-function spellForEntity(entity: string, entityMap: Map<string, SpellMeta>): SpellMeta | undefined {
-  return entityMap.get(entity);
+function spellName(spell: SpellMeta | undefined, fallback: string, lang: Lang): string {
+  if (!spell) return fallback;
+  return lang === 'zh' ? spell.displayZh : spell.nameEn;
+}
+
+function entityLabel(entity: string): string {
+  return entity.split('/').pop() ?? entity;
 }
 
 function SpellIcon({ spell, data }: { spell?: SpellMeta; data: GameData }) {
@@ -42,42 +48,94 @@ function triggerLabel(kind: ProjectileNode['triggerKind']): string {
   return 'result.triggerHitWorld';
 }
 
-function ProjectileRows({
+/** Recursive cast-block view: called spells (modifiers, multicasts, projectiles) + projectiles. */
+function BlockView({
   block,
   depth,
   data,
   lang,
-  entityMap,
+  byId,
+  byEntity,
+  triggerKind,
 }: {
   block: CastBlock;
   depth: number;
   data: GameData;
   lang: Lang;
-  entityMap: Map<string, SpellMeta>;
+  byId: Map<string, SpellMeta>;
+  byEntity: Map<string, SpellMeta>;
+  triggerKind?: ProjectileNode['triggerKind'];
 }) {
+  const actions = block.actions.map((action) => ({ ...action, spell: byId.get(action.id) }));
+  const modifiers = actions.filter((action) => action.spell?.type === 'modifier');
+  const empty = block.actions.length === 0 && block.projectiles.length === 0;
+
   return (
-    <>
-      {block.projectiles.map((node, index) => {
-        const spell = spellForEntity(node.entity, entityMap);
-        return (
-          <div className="proj-node" key={index} style={{ marginLeft: depth * 18 }}>
-            <div className="proj-line">
-              <SpellIcon spell={spell} data={data} />
-              <span className="proj-name">{spell ? (lang === 'zh' ? spell.displayZh : spell.nameEn) : node.entity.split('/').pop()}</span>
-              <span className="proj-file">{node.entity.split('/').pop()}</span>
-            </div>
-            {node.trigger && (
-              <>
-                <div className="trigger-label" style={{ marginLeft: 18 }}>
-                  ↳ {t(lang, triggerLabel(node.triggerKind))}
+    <div className={`cast-block${depth > 0 ? ' nested' : ''}`}>
+      {depth > 0 && (
+        <div className="block-label">
+          ↳ {t(lang, 'result.payload')}
+          {triggerKind ? `（${t(lang, triggerLabel(triggerKind))}）` : ''}
+        </div>
+      )}
+
+      {actions.length > 0 && (
+        <div className="block-actions">
+          {actions.map((action, index) => (
+            <span
+              key={`${action.id}-${index}`}
+              className={`action-chip type-${action.spell?.type ?? 'unknown'}`}
+              title={action.id}
+            >
+              <SpellIcon spell={action.spell} data={data} />
+              <span className="chip-name">{spellName(action.spell, action.id, lang)}</span>
+              {action.deckIndex !== null && <span className="chip-slot">#{action.deckIndex + 1}</span>}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {modifiers.length > 0 && (
+        <div className="block-mods">
+          {t(lang, 'result.modifiers')}：{modifiers.map((action) => spellName(action.spell, action.id, lang)).join('、')}
+        </div>
+      )}
+
+      {block.projectiles.length > 0 && (
+        <div className="block-projectiles">
+          {block.projectiles.map((projectile, index) => {
+            const spell = byEntity.get(projectile.entity);
+            return (
+              <div className="proj-card" key={`${projectile.entity}-${index}`}>
+                <div className="proj-line">
+                  <SpellIcon spell={spell} data={data} />
+                  <span className="proj-name">{spellName(spell, entityLabel(projectile.entity), lang)}</span>
+                  <span className="proj-file">{entityLabel(projectile.entity)}</span>
+                  {projectile.trigger && (
+                    <span className="trigger-badge">
+                      {t(lang, triggerLabel(projectile.triggerKind))}
+                    </span>
+                  )}
                 </div>
-                <ProjectileRows block={node.trigger} depth={depth + 1} data={data} lang={lang} entityMap={entityMap} />
-              </>
-            )}
-          </div>
-        );
-      })}
-    </>
+                {projectile.trigger && (
+                  <BlockView
+                    block={projectile.trigger}
+                    depth={depth + 1}
+                    data={data}
+                    lang={lang}
+                    byId={byId}
+                    byEntity={byEntity}
+                    triggerKind={projectile.triggerKind}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {empty && <div className="muted small">—</div>}
+    </div>
   );
 }
 
@@ -90,8 +148,7 @@ function countProjectiles(block: CastBlock): number {
   return total;
 }
 
-function Pile({ title, ids, data, lang }: { title: string; ids: string[]; data: GameData; lang: Lang }) {
-  const spellById = useMemo(() => new Map(data.spells.map((spell) => [spell.id, spell])), [data.spells]);
+function Pile({ title, ids, data, lang, byId }: { title: string; ids: string[]; data: GameData; lang: Lang; byId: Map<string, SpellMeta> }) {
   return (
     <div className="pile">
       <div className="pile-title">
@@ -100,11 +157,11 @@ function Pile({ title, ids, data, lang }: { title: string; ids: string[]; data: 
       <div className="pile-items">
         {ids.length === 0 && <span className="muted small">{t(lang, 'result.empty')}</span>}
         {ids.map((id, index) => {
-          const spell = spellById.get(id);
+          const spell = byId.get(id);
           return (
             <span className="pile-chip" key={`${id}-${index}`} title={id}>
               <SpellIcon spell={spell} data={data} />
-              <span>{spell ? (lang === 'zh' ? spell.displayZh : spell.nameEn) : id}</span>
+              <span>{spellName(spell, id, lang)}</span>
             </span>
           );
         })}
@@ -113,61 +170,163 @@ function Pile({ title, ids, data, lang }: { title: string; ids: string[]; data: 
   );
 }
 
-function renderEvent(
-  event: EngineEvent,
-  shot: ShotResult,
-  data: GameData,
-  lang: Lang,
-  entityMap: Map<string, SpellMeta>,
-): { label: string; tone: string; spell?: SpellMeta } {
-  switch (event.type) {
-    case 'shotStart':
-      return { tone: 'start', label: t(lang, 'event.shotStart', { mana: event.mana, frame: event.frame }) };
-    case 'orderDeck':
-      return event.shuffled
-        ? { tone: 'shuffle', label: t(lang, 'event.shuffle', { frame: shot.frame }) }
-        : { tone: 'deck', label: t(lang, 'event.orderDeck') };
-    case 'draw':
-      return event.ok === false
-        ? { tone: 'fail', label: t(lang, 'event.drawFail') }
-        : { tone: 'draw', label: t(lang, 'event.draw', { before: event.deckBefore, after: event.deckAfter }) };
-    case 'action': {
-      const spell = data.spells.find((item) => item.id === event.id);
-      return {
-        tone: 'action',
-        label: t(lang, 'event.action', { name: spell ? (lang === 'zh' ? spell.displayZh : spell.nameEn) : event.id }),
-        spell,
-      };
+// --- human readable cast steps ----------------------------------------------
+
+interface Step {
+  depth: number;
+  tone: string;
+  text: string;
+  spell?: SpellMeta;
+  deltas: string[];
+}
+
+const DELTA_FORMATS: Record<string, { label: string; kind: 'seconds' | 'number' | 'percent' | 'degrees' | 'multiplier' }> = {
+  fire_rate_wait: { label: 'delta.castDelay', kind: 'seconds' },
+  reload_time: { label: 'delta.recharge', kind: 'seconds' },
+  damage_projectile_add: { label: 'delta.damageProjectile', kind: 'number' },
+  damage_explosion_add: { label: 'delta.damageExplosion', kind: 'number' },
+  damage_critical_chance: { label: 'delta.critChance', kind: 'percent' },
+  spread_degrees: { label: 'delta.spread', kind: 'degrees' },
+  speed_multiplier: { label: 'delta.speed', kind: 'multiplier' },
+  lifetime_add: { label: 'delta.lifetime', kind: 'number' },
+  bounces: { label: 'delta.bounces', kind: 'number' },
+  explosion_radius: { label: 'delta.explosionRadius', kind: 'number' },
+  screenshake: { label: 'delta.screenshake', kind: 'number' },
+  recoil: { label: 'delta.recoil', kind: 'number' },
+};
+
+function signed(value: string): string {
+  const numeric = Number(value);
+  if (Number.isNaN(numeric)) return value;
+  return numeric > 0 ? `+${value}` : value;
+}
+
+function formatDeltas(delta: Record<string, number> | undefined, lang: Lang): string[] {
+  if (!delta) return [];
+  const out: string[] = [];
+  for (const [key, value] of Object.entries(delta)) {
+    const format = DELTA_FORMATS[key];
+    if (!format || value === 0) continue;
+    let rendered: string;
+    switch (format.kind) {
+      case 'seconds':
+        rendered = `${signed(formatFramesAsSeconds(value))}s`;
+        break;
+      case 'percent':
+        rendered = `${signed(formatNumber(value))}%`;
+        break;
+      case 'degrees':
+        rendered = `${signed(formatNumber(value))}°`;
+        break;
+      case 'multiplier':
+        rendered = `${signed(formatNumber(value))}×`;
+        break;
+      default:
+        rendered = signed(formatNumber(value));
     }
-    case 'projectileBegin': {
-      const spell = spellForEntity(event.entity, entityMap);
-      return {
-        tone: 'projectile',
-        label: t(lang, 'event.projectile', {
-          name: spell ? (lang === 'zh' ? spell.displayZh : spell.nameEn) : event.entity.split('/').pop() ?? event.entity,
-        }),
-        spell,
-      };
-    }
-    case 'triggerBegin':
-      return { tone: 'trigger', label: t(lang, 'event.trigger', { kind: t(lang, triggerLabel(event.kind)) }) };
-    case 'triggerEnd':
-      return { tone: 'trigger', label: t(lang, 'event.triggerEnd') };
-    case 'notEnoughMana':
-      return { tone: 'fail', label: t(lang, 'event.notEnoughMana') };
-    case 'reload':
-      return { tone: 'reload', label: t(lang, 'event.reload', { seconds: formatFramesAsSeconds(event.timeFrames) }) };
-    case 'shotEnd':
-      return {
-        tone: 'end',
-        label: t(lang, 'event.shotEnd', {
-          delay: formatFramesAsSeconds(event.castDelayFrames),
-          recharge: formatFramesAsSeconds(event.reloadFrames),
-        }),
-      };
-    default:
-      return { tone: 'other', label: (event as { type: string }).type };
+    out.push(t(lang, format.label, { value: rendered }));
   }
+  return out.slice(0, 4);
+}
+
+function buildSteps(shot: ShotResult, lang: Lang, byId: Map<string, SpellMeta>, byEntity: Map<string, SpellMeta>): Step[] {
+  const steps: Step[] = [];
+  let depth = 0;
+  let lastProjectile = '';
+  let draws = 0;
+  let calls = 0;
+
+  for (const event of shot.events as EngineEvent[]) {
+    switch (event.type) {
+      case 'shotStart':
+        steps.push({
+          depth: 0,
+          tone: 'start',
+          text: t(lang, 'event.shotStart', { mana: event.mana, frame: event.frame }),
+          deltas: [],
+        });
+        break;
+      case 'orderDeck':
+        steps.push({
+          depth: 0,
+          tone: 'deck',
+          text: event.shuffled ? t(lang, 'event.shuffle', { frame: shot.frame }) : t(lang, 'event.orderDeck'),
+          deltas: [],
+        });
+        break;
+      case 'draw':
+        if (event.ok === false) {
+          steps.push({ depth, tone: 'fail', text: t(lang, 'event.drawFail'), deltas: [] });
+        } else {
+          draws += 1;
+        }
+        break;
+      case 'action': {
+        calls += 1;
+        const spell = byId.get(event.id);
+        steps.push({
+          depth,
+          tone: 'action',
+          text: t(lang, 'event.action', { name: spellName(spell, event.id, lang) }),
+          spell,
+          deltas: formatDeltas(event.delta, lang),
+        });
+        break;
+      }
+      case 'projectileBegin': {
+        const spell = byEntity.get(event.entity);
+        lastProjectile = spellName(spell, entityLabel(event.entity), lang);
+        steps.push({
+          depth,
+          tone: 'projectile',
+          text: t(lang, 'event.projectile', { name: lastProjectile }),
+          spell,
+          deltas: [],
+        });
+        break;
+      }
+      case 'triggerBegin':
+        steps.push({
+          depth,
+          tone: 'trigger',
+          text: t(lang, 'step.trigger', {
+            name: lastProjectile,
+            kind: t(lang, triggerLabel(event.kind)),
+          }),
+          deltas: [],
+        });
+        depth += 1;
+        break;
+      case 'triggerEnd':
+        depth = Math.max(0, depth - 1);
+        steps.push({ depth, tone: 'trigger', text: t(lang, 'step.triggerEnd'), deltas: [] });
+        break;
+      case 'reload':
+        steps.push({
+          depth: 0,
+          tone: 'reload',
+          text: t(lang, 'event.reload', { seconds: formatFramesAsSeconds(event.timeFrames) }),
+          deltas: [],
+        });
+        break;
+      case 'shotEnd':
+        steps.push({
+          depth: 0,
+          tone: 'end',
+          text: t(lang, 'event.shotEnd', {
+            delay: formatFramesAsSeconds(event.castDelayFrames),
+            recharge: formatFramesAsSeconds(event.reloadFrames),
+          }),
+          deltas: [],
+        });
+        break;
+      case 'notEnoughMana':
+        break;
+      default:
+        break;
+    }
+  }
+  return [{ depth: 0, tone: 'summary', text: t(lang, 'step.summary', { draws, calls }), deltas: [] }, ...steps];
 }
 
 const STATE_ROWS: { key: string; format: 'seconds' | 'percent' | 'multiplier' | 'degrees' | 'number' }[] = [
@@ -183,13 +342,12 @@ const STATE_ROWS: { key: string; format: 'seconds' | 'percent' | 'multiplier' | 
   { key: 'explosion_radius', format: 'number' },
 ];
 
-function stateValue(key: string, format: (typeof STATE_ROWS)[number]['format'], value: number): string {
+function stateValue(format: (typeof STATE_ROWS)[number]['format'], value: number): string {
   switch (format) {
     case 'seconds':
       return formatFramesAsSeconds(value);
     case 'percent':
     case 'degrees':
-      return formatNumber(value);
     case 'multiplier':
       return formatNumber(value);
     default:
@@ -197,8 +355,10 @@ function stateValue(key: string, format: (typeof STATE_ROWS)[number]['format'], 
   }
 }
 
-function ShotCard({ shot, index, data, lang, entityMap }: { shot: ShotResult; index: number; data: GameData; lang: Lang; entityMap: Map<string, SpellMeta> }) {
+function ShotCard({ shot, index, data, lang }: { shot: ShotResult; index: number; data: GameData; lang: Lang }) {
+  const { byId, byEntity } = useSpellMaps(data);
   const projectiles = countProjectiles(shot.block);
+  const steps = useMemo(() => buildSteps(shot, lang, byId, byEntity), [shot, lang, byId, byEntity]);
   const stateRows = STATE_ROWS.map((row) => {
     const value = shot.castState[row.key];
     return typeof value === 'number' && value !== 0 ? { ...row, value } : null;
@@ -224,32 +384,53 @@ function ShotCard({ shot, index, data, lang, entityMap }: { shot: ShotResult; in
       <div className="shot-columns">
         <section className="shot-tree">
           <h4>{t(lang, 'result.tree')}</h4>
-          {projectiles === 0 ? (
+          {projectiles === 0 && shot.block.actions.length === 0 ? (
             <p className="muted">{t(lang, 'result.noProjectiles')}</p>
           ) : (
-            <ProjectileRows block={shot.block} depth={0} data={data} lang={lang} entityMap={entityMap} />
+            <BlockView block={shot.block} depth={0} data={data} lang={lang} byId={byId} byEntity={byEntity} />
           )}
         </section>
         <section className="piles">
           <h4>{t(lang, 'result.piles')}</h4>
-          <Pile title={t(lang, 'result.pileDeck')} ids={shot.deck} data={data} lang={lang} />
-          <Pile title={t(lang, 'result.pileHand')} ids={shot.hand} data={data} lang={lang} />
-          <Pile title={t(lang, 'result.pileDiscard')} ids={shot.discarded} data={data} lang={lang} />
+          <Pile title={t(lang, 'result.pileDeck')} ids={shot.deck} data={data} lang={lang} byId={byId} />
+          <Pile title={t(lang, 'result.pileHand')} ids={shot.hand} data={data} lang={lang} byId={byId} />
+          <Pile title={t(lang, 'result.pileDiscard')} ids={shot.discarded} data={data} lang={lang} byId={byId} />
         </section>
       </div>
 
+      <section className="shot-steps">
+        <h4>{t(lang, 'result.steps')}</h4>
+        <ol className="step-list">
+          {steps.map((step, stepIndex) => (
+            <li
+              key={stepIndex}
+              className={`step step-${step.tone}`}
+              style={{ marginLeft: step.depth * 18 }}
+            >
+              {step.spell && <SpellIcon spell={step.spell} data={data} />}
+              <span className="step-text">{step.text}</span>
+              {step.deltas.length > 0 && (
+                <span className="step-deltas">
+                  {step.deltas.map((delta, deltaIndex) => (
+                    <span className="step-delta" key={deltaIndex}>
+                      {delta}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      </section>
+
       <details className="shot-details">
-        <summary>{t(lang, 'result.events')}</summary>
+        <summary>{t(lang, 'result.rawEvents')}</summary>
         <ol className="event-list">
-          {shot.events.map((event, eventIndex) => {
-            const rendered = renderEvent(event, shot, data, lang, entityMap);
-            return (
-              <li key={eventIndex} className={`event event-${rendered.tone}`}>
-                {rendered.spell && <SpellIcon spell={rendered.spell} data={data} />}
-                <span>{rendered.label}</span>
-              </li>
-            );
-          })}
+          {shot.events.map((event, eventIndex) => (
+            <li key={eventIndex} className={`event event-${event.type}`}>
+              {JSON.stringify(event)}
+            </li>
+          ))}
         </ol>
       </details>
 
@@ -258,9 +439,7 @@ function ShotCard({ shot, index, data, lang, entityMap }: { shot: ShotResult; in
           <summary>{t(lang, 'result.stateTitle')}</summary>
           <ul className="state-list">
             {stateRows.map((row) => (
-              <li key={row.key}>
-                {t(lang, `state.${row.key}`, { value: stateValue(row.key, row.format, row.value) })}
-              </li>
+              <li key={row.key}>{t(lang, `state.${row.key}`, { value: stateValue(row.format, row.value) })}</li>
             ))}
           </ul>
         </details>
@@ -270,8 +449,6 @@ function ShotCard({ shot, index, data, lang, entityMap }: { shot: ShotResult; in
 }
 
 export function CastResult({ result, data, lang, mode, onModeChange, simulating, error }: Props) {
-  const entityMap = useEntityMap(data);
-
   return (
     <section className="panel cast-result">
       <header className="panel-header">
@@ -292,13 +469,12 @@ export function CastResult({ result, data, lang, mode, onModeChange, simulating,
       </header>
 
       {error && <div className="error">{t(lang, 'result.error', { message: error })}</div>}
-
       {!result && !error && <p className="muted">{t(lang, 'result.emptyHint')}</p>}
 
       {result && (
         <div className="shot-list">
           {result.shots.map((shot, index) => (
-            <ShotCard key={index} shot={shot} index={index} data={data} lang={lang} entityMap={entityMap} />
+            <ShotCard key={index} shot={shot} index={index} data={data} lang={lang} />
           ))}
         </div>
       )}

@@ -125,8 +125,22 @@ for (const needle of ['火花弹', '炸弹', '命中触发']) {
 const filledBefore = await evaluate("document.querySelectorAll('.wand-slot.filled').length");
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.scrollIntoView({ block: 'center' }); el.click(); return true; })()`);
 await waitFor(`document.querySelectorAll('.wand-slot.filled').length === ${filledBefore + 1}`, 15000, 'slot filled');
-await waitFor("!!document.querySelector('.state-list')", 20000, 'state list after adding DAMAGE');
 console.log('✓ click-to-add works, filled slots:', await evaluate("document.querySelectorAll('.wand-slot.filled').length"));
+
+// 3b) a modifier is visible in the cast tree + explained in the casting steps
+await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'double-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await waitFor(
+  "(document.querySelector('.shot-tree')?.innerText || '').includes('伤害增强') && document.querySelector('.block-mods')?.innerText",
+  60000,
+  'modifier in cast tree',
+);
+const modifiersText = await evaluate("document.querySelector('.block-mods')?.innerText || ''");
+if (!modifiersText.includes('伤害增强')) throw new Error('missing modifier summary: ' + modifiersText);
+const stepsText = await evaluate("document.querySelector('.step-list')?.innerText || ''");
+if (!stepsText.includes('施法过程') && !stepsText.includes('本次施法')) throw new Error('missing human steps: ' + stepsText);
+if (!stepsText.includes('投射物伤害')) throw new Error('missing modifier delta explanation: ' + stepsText);
+if (!stepsText.includes('执行 伤害增强')) throw new Error('missing action explanation: ' + stepsText);
+console.log('✓ modifier shown in tree + explained in steps');
 
 // 4) divide-by-10 preset => 800 projectiles
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -178,11 +192,13 @@ await evaluate("document.querySelector('.lang-switch').click()");
 await sleep(300);
 console.log('✓ i18n toggle works');
 
-// 8) screenshot with the simple trigger wand
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'trigger-bomb'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("(document.querySelector('.shot-header')?.innerText || '').includes('投射物 2')", 60000, 'trigger preset');
-await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+// 8) screenshot: a wand with a modifier, scrolled to the cast result
+await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'double-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await waitFor("(document.querySelector('.block-mods')?.innerText || '').includes('伤害增强')", 60000, 'double-damage preset');
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1100, deviceScaleFactor: 1, mobile: false });
 await sleep(300);
+await evaluate("document.querySelector('.cast-result').scrollIntoView({ block: 'start' }); true");
+await sleep(400);
 const screenshot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(SHOT, Buffer.from(screenshot.data, 'base64'));
 console.log('✓ screenshot:', SHOT);

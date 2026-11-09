@@ -53,13 +53,24 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
           ok: entry[4] === undefined ? null : entry[4] === true,
         });
         break;
-      case 'action':
+      case 'action': {
+        const deltaRaw = entry[3];
+        let delta: Record<string, number> | undefined;
+        if (deltaRaw && typeof deltaRaw === 'object') {
+          const parsed: Record<string, number> = {};
+          for (const [key, value] of Object.entries(deltaRaw as Record<string, unknown>)) {
+            if (typeof value === 'number' && value !== 0) parsed[key] = value;
+          }
+          if (Object.keys(parsed).length > 0) delta = parsed;
+        }
         events.push({
           type: 'action',
           id: String(entry[1]),
           deckIndex: entry[2] === undefined ? null : Number(entry[2]),
+          delta,
         });
         break;
+      }
       case 'projectileBegin':
         events.push({ type: 'projectileBegin', entity: String(entry[1]) });
         break;
