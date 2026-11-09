@@ -118,9 +118,16 @@ if (!shotText.includes('第 1 次施法')) throw new Error('missing shot header'
 const summaryText = await evaluate("document.querySelector('.spell-summary')?.innerText || ''");
 if (!summaryText.includes('共 2 个投射物')) throw new Error('expected summary with 2 projectiles, got: ' + summaryText);
 const treeText = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
-for (const needle of ['抽到「触发火花弹」', '开启命中触发', '抽到「炸弹」', '生成投射物', '弃牌']) {
+for (const needle of ['抽到「触发火花弹」', '开启命中触发', '抽到「炸弹」', '弃牌']) {
   if (!treeText.includes(needle)) throw new Error(`cast tree missing ${needle}: ${treeText}`);
 }
+if (treeText.includes('生成投射物')) throw new Error('tree should not have a separate projectile line: ' + treeText);
+// casting steps are collapsed by default; open them for the rest of the checks
+if ((await evaluate("document.querySelectorAll('.step-list').length")) !== 0) throw new Error('casting steps should be collapsed by default');
+await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
+await waitFor("document.querySelectorAll('.step-list').length > 0", 10000, 'casting steps opened');
+const firstStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
+if (!firstStory.includes('生成投射物')) throw new Error('story should mention the spawned projectile: ' + firstStory);
 
 // 3) click a spell to fill the next empty slot
 const filledBefore = await evaluate("document.querySelectorAll('.wand-slot.filled').length");
@@ -183,12 +190,12 @@ if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated sibli
 if (!wikiStory.includes('重复 8 次')) throw new Error('story should fold repeated runs: ' + wikiStory.slice(0, 800));
 const storySequences = await evaluate("document.querySelectorAll('.step-sequence').length");
 if (storySequences === 0) throw new Error('story should fold repeated multi-line runs with braces');
-const stepsBeforeExpand = await evaluate("document.querySelectorAll('.step-list > li').length");
-await evaluate("document.querySelector('.step-sequence .step-repeat-toggle').click(); true");
+const stepsBeforeExpand = await evaluate("document.querySelectorAll('.step-list li').length");
+await evaluate("document.querySelector('.step-sequence .step-seq-head').click(); true");
 await sleep(300);
-const stepsAfterExpand = await evaluate("document.querySelectorAll('.step-list > li').length");
+const stepsAfterExpand = await evaluate("document.querySelectorAll('.step-list li').length");
 if (stepsAfterExpand <= stepsBeforeExpand) throw new Error('clicking the story repeat count should expand it');
-await evaluate("document.querySelector('.step-sequence .step-repeat-toggle').click(); true");
+await evaluate("document.querySelector('.step-sequence .step-seq-head').click(); true");
 await sleep(200);
 console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discards, multi-line story folding');
 
@@ -261,11 +268,17 @@ await evaluate("document.querySelector('.tree-repeat').click(); true");
 await sleep(250);
 const repeatExpanded = await evaluate("document.querySelectorAll('.tree-action').length");
 if (repeatExpanded <= repeatBefore) throw new Error('clicking ×N should expand the repeated tree group');
-await evaluate("document.querySelector('.tree-repeat').click(); true");
+const collapseButtons = await evaluate("document.querySelectorAll('.tree-collapse').length");
+if (collapseButtons === 0) throw new Error('expanded tree group should offer a collapse button');
+await evaluate("document.querySelector('.tree-collapse').click(); true");
 await sleep(250);
-const storyRepeatButtons = await evaluate("document.querySelectorAll('.step-repeat-toggle').length");
+const repeatCollapsed = await evaluate("document.querySelectorAll('.tree-action').length");
+if (repeatCollapsed !== repeatBefore) throw new Error('collapsing should restore the folded tree');
+const storyRepeatButtons = await evaluate(
+  "document.querySelectorAll('.step-repeat-toggle, .step-seq-head').length",
+);
 if (storyRepeatButtons === 0) throw new Error('story repeat lines should be clickable');
-console.log('✓ repeat counts expand groups in tree and story');
+console.log('✓ repeat counts expand and collapse groups in tree and story');
 
 // 4d) casting steps collapse, compact picker without inner scroll, sticky spell bar
 await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
@@ -305,6 +318,13 @@ const setNumberInput = `(index, value) => {
   setter.call(input, String(value));
   input.dispatchEvent(new Event('input', { bubbles: true }));
 }`;
+await evaluate(`(${setNumberInput})(1, 26); true`);
+await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 26", 10000, 'capacity 26 slots');
+const slotRows = await evaluate(`(() => {
+  const tops = [...document.querySelectorAll('.wand-slots .wand-slot')].map((el) => Math.round(el.getBoundingClientRect().top));
+  return new Set(tops).size;
+})()`);
+if (slotRows !== 1) throw new Error('26 wand slots should fit in one row, got rows: ' + slotRows);
 await evaluate(`(${setNumberInput})(1, 40); true`);
 await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 40", 10000, 'capacity 40 slots');
 const statsBefore = await evaluate(`(() => {
@@ -414,7 +434,14 @@ const screenshot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(SHOT, Buffer.from(screenshot.data, 'base64'));
 console.log('✓ screenshot:', SHOT);
 
-await evaluate("document.querySelector('.shot-steps')?.scrollIntoView({ block: 'start' }); true");
+await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
+await waitFor("document.querySelectorAll('.step-list').length > 0", 10000, 'steps open for screenshot');
+await evaluate(`(() => {
+  document.querySelector('.shot-steps').scrollIntoView({ block: 'start' });
+  const sticky = document.querySelector('.wand-sticky');
+  window.scrollBy(0, -((sticky?.offsetHeight || 0) + 16));
+  return true;
+})()`);
 await sleep(400);
 const stepsShot = await send('Page.captureScreenshot', { format: 'png' });
 const stepsPath = SHOT.replace(/\.png$/, '-steps.png');

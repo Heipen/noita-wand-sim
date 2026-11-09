@@ -461,16 +461,16 @@ main {
 .wand-slots {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 3px;
 }
 
 .wand-slot {
   position: relative;
-  width: 46px;
-  height: 46px;
-  flex: 0 0 46px;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 7px;
   background: #17131f;
   display: flex;
   align-items: center;
@@ -638,19 +638,19 @@ main {
 }
 
 .spell-card-compact {
-  padding: 2px 5px;
-  gap: 5px;
+  padding: 3px 6px;
+  gap: 7px;
 }
 
 .spell-card-compact .spell-icon {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
 }
 
 .spell-card-compact .spell-icon img {
-  width: 20px;
-  height: 20px;
+  width: 28px;
+  height: 28px;
 }
 
 .spell-card-compact .spell-title {
@@ -1296,12 +1296,22 @@ main {
   margin-top: 2px;
 }
 
+.tree-projectile-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .tree-projectile {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   font-size: 11px;
   color: var(--muted);
+  margin-right: 6px;
 }
 
 .tree-mods {
@@ -1351,6 +1361,69 @@ main {
 .step-sequence .step-repeat-toggle {
   color: #8fe0b8;
   font-weight: 600;
+}
+
+.step-seq-head {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #8fe0b8;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.step-seq-head:hover {
+  text-decoration: underline;
+}
+
+.step-brace-wrap {
+  position: relative;
+  margin-top: 3px;
+  padding-left: 20px;
+}
+
+.step-brace {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  font-size: 40px;
+  line-height: 1;
+  font-weight: 300;
+  color: #8fe0b8;
+  pointer-events: none;
+}
+
+.step-sublist {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-left: 1px dashed rgba(143, 224, 184, 0.35);
+}
+
+.tree-expanded-group {
+  border-left: 2px solid #2b5a4a;
+  padding-left: 6px;
+}
+
+.tree-collapse {
+  margin: 2px 0 4px;
+  padding: 1px 8px;
+  border: 1px solid #2b5a4a;
+  border-radius: 999px;
+  background: #1d2418;
+  color: #8fe0b8;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
 }
 
 .tree-heading {

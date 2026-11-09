@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import type { CastTreeNode, EngineEvent, ShotResult, SimulationResult } from '../engine/types';
 import { formatFramesAsSeconds, formatNumber } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
@@ -138,9 +139,9 @@ function nodeSignature(node: CastTreeNode): string {
       return `card(${node.spellId ?? '-'},${node.ok})[${node.children.map(nodeSignature).join(',')}]`;
     case 'action': {
       const delta = node.delta ? JSON.stringify(Object.entries(node.delta).sort()) : '';
-      return `action(${node.id},${node.recursion ?? '-'},${node.iteration ?? '-'},${node.dontDraw},${
-        node.permanent
-      },${node.projectiles.join('|')},${delta})[${node.children.map(nodeSignature).join(',')}]`;
+      // `dontDraw` / `iteration` are deliberately not part of the signature: the same
+      // process repeated with different copy bookkeeping should still fold together.
+      return `action(${node.id},${node.recursion ?? '-'},${node.permanent},${node.projectiles.join('|')},${delta})[${node.children.map(nodeSignature).join(',')}]`;
     }
     case 'trigger':
       return `trigger(${node.triggerKind},${node.projectile ?? '-'})[${node.children.map(nodeSignature).join(',')}]`;
@@ -468,6 +469,21 @@ function TreeNodeView({
             {node.recursion !== null && <span className="tree-badge">{t(lang, 'tree.recursion', { n: node.recursion })}</span>}
             {node.iteration !== null && <span className="tree-badge">{t(lang, 'tree.iteration', { n: node.iteration })}</span>}
             {copiesNothing(node) && <span className="tree-badge warn">{t(lang, 'tree.noCopies')}</span>}
+            {node.projectiles.length > 0 && (
+              <span className="tree-projectile-inline">
+                →{' '}
+                {node.projectiles.map((entity, index) => {
+                  const projectileSpell = maps.byEntity.get(entity);
+                  const name = spellName(projectileSpell, entityLabel(entity), lang);
+                  return (
+                    <span className="tree-projectile" key={index} title={name}>
+                      <SpellIcon spell={projectileSpell} data={data} />
+                      {name}
+                    </span>
+                  );
+                })}
+              </span>
+            )}
             {repeatBadge}
           </div>
           {deltas.length > 0 && (
@@ -477,19 +493,6 @@ function TreeNodeView({
                   {delta}
                 </span>
               ))}
-            </div>
-          )}
-          {node.projectiles.length > 0 && (
-            <div className="tree-projectiles">
-              {node.projectiles.map((entity, index) => {
-                const projectileSpell = maps.byEntity.get(entity);
-                return (
-                  <span className="tree-projectile" key={index}>
-                    <SpellIcon spell={projectileSpell} data={data} />
-                    {t(lang, 'tree.projectile', { name: spellName(projectileSpell, entityLabel(entity), lang) })}
-                  </span>
-                );
-              })}
             </div>
           )}
           {node.dontDraw ? renderEntries(group.children, true) : renderEntries(group.children)}
@@ -592,7 +595,15 @@ function TreeEntryView({
   }
   if (entry.repeat > 1 && expanded.has(entry.id)) {
     return (
-      <>
+      <div className="tree-expanded-group">
+        <button
+          type="button"
+          className="tree-collapse"
+          onClick={() => onToggle(entry.id)}
+          title={t(lang, 'tree.foldAgain')}
+        >
+          ×{entry.repeat} {t(lang, 'tree.collapse')}
+        </button>
         {Array.from({ length: entry.repeat }, (_, rep) => (
           <TreeNodeView
             key={`${entry.id}-${rep}`}
@@ -609,7 +620,7 @@ function TreeEntryView({
             parentDontDraw={parentDontDraw}
           />
         ))}
-      </>
+      </div>
     );
   }
   return (
@@ -647,7 +658,15 @@ interface StoryStep {
 }
 
 function storyStepKey(step: StoryStep): string {
-  return `${step.depth}|${step.tone}|${step.text}|${step.spell?.id ?? ''}|${JSON.stringify(step.deltas)}`;
+  // ignore copy bookkeeping annotations (#slot, dont-draw, recursion/iteration) so the
+  // same repeated process still folds even if one copy is marked differently
+  const text = step.text
+    .replace(/\s*#\d+/g, '')
+    .replace(/（[^）]*(禁抽|始终施放)[^）]*）/g, '')
+    .replace(/\s*递归 \d+/g, '')
+    .replace(/\s*迭代 \d+/g, '')
+    .trim();
+  return `${step.depth}|${step.tone}|${text}|${step.spell?.id ?? ''}|${JSON.stringify(step.deltas)}`;
 }
 
 /**
@@ -659,7 +678,7 @@ function foldStorySteps(steps: StoryStep[], lang: Lang): StoryStep[] {
   let index = 0;
   while (index < steps.length) {
     let folded = false;
-    const maxPeriod = Math.min(6, Math.floor((steps.length - index) / 2));
+    const maxPeriod = Math.min(30, Math.floor((steps.length - index) / 2));
     for (let period = 2; period <= maxPeriod; period += 1) {
       const pattern = steps.slice(index, index + period);
       const sigs = pattern.map(storyStepKey);
@@ -691,27 +710,6 @@ function foldStorySteps(steps: StoryStep[], lang: Lang): StoryStep[] {
       index += 1;
     }
   }
-  return out;
-}
-
-interface FlatStoryStep {
-  step: StoryStep;
-  key: string;
-}
-
-/** Expand folded story sequences for rendering (one copy collapsed, N copies when expanded). */
-function flattenStorySteps(steps: StoryStep[], expanded: Set<string>, prefix = ''): FlatStoryStep[] {
-  const out: FlatStoryStep[] = [];
-  steps.forEach((step, index) => {
-    const key = `${prefix}${index}`;
-    out.push({ step, key });
-    if (step.pattern && step.groupId) {
-      const reps = expanded.has(step.groupId) ? step.count ?? 1 : 1;
-      for (let rep = 0; rep < reps; rep += 1) {
-        out.push(...flattenStorySteps(step.pattern, expanded, `${key}-${rep}-`));
-      }
-    }
-  });
   return out;
 }
 
@@ -773,6 +771,13 @@ function buildStory(
       return;
     }
     if (entry.repeat > 1 && expanded.has(entry.id)) {
+      steps.push({
+        depth,
+        tone: 'repeat',
+        text: t(lang, 'tree.storyRepeatExpanded', { count: entry.repeat }),
+        deltas: [],
+        groupId: entry.id,
+      });
       for (let rep = 0; rep < entry.repeat; rep += 1) {
         walkNode(entry.group.node, entry.group.children, depth, context, 1, undefined);
       }
@@ -1042,7 +1047,7 @@ function ShotCard({
   const maps = useSpellMaps(data);
   const slotMap = useMemo(() => buildSlotMap(wandSpells), [wandSpells]);
   const [treeOpen, setTreeOpen] = useState(true);
-  const [stepsOpen, setStepsOpen] = useState(true);
+  const [stepsOpen, setStepsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   useEffect(() => {
     setExpanded(new Set());
@@ -1068,7 +1073,6 @@ function ShotCard({
     () => (foldRepeats ? foldStorySteps(rawStory, lang) : rawStory),
     [rawStory, lang, foldRepeats],
   );
-  const flatStory = useMemo(() => flattenStorySteps(story, expanded), [story, expanded]);
   const stateRows = STATE_ROWS.map((row) => {
     const value = shot.castState[row.key];
     return typeof value === 'number' && value !== 0 ? { ...row, value } : null;
@@ -1081,6 +1085,64 @@ function ShotCard({
       ),
     [shot.events],
   );
+
+  const renderStorySteps = (steps: StoryStep[], baseDepth = 0, prefix = ''): ReactNode =>
+    steps.map((step, index) => {
+      const key = `${prefix}${index}`;
+      const marginLeft = (step.depth - baseDepth) * INDENT;
+      if (step.pattern && step.groupId) {
+        const isExpanded = expanded.has(step.groupId);
+        const reps = isExpanded ? step.count ?? 1 : 1;
+        return (
+          <li key={key} className="step step-sequence" style={{ marginLeft }}>
+            <button
+              type="button"
+              className="step-seq-head"
+              onClick={() => toggleGroup(step.groupId!)}
+              title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
+            >
+              {step.text} {isExpanded ? '▾' : '▸'}
+            </button>
+            <div className="step-brace-wrap">
+              <span className="step-brace">{'{'}</span>
+              <ol className="step-sublist">
+                {Array.from({ length: reps }, (_, rep) => (
+                  <Fragment key={rep}>
+                    {renderStorySteps(step.pattern!, step.depth, `${key}-${rep}-`)}
+                  </Fragment>
+                ))}
+              </ol>
+            </div>
+          </li>
+        );
+      }
+      return (
+        <li key={key} className={`step step-${step.tone}`} style={{ marginLeft }}>
+          {step.spell && <SpellIcon spell={step.spell} data={data} />}
+          {step.groupId ? (
+            <button
+              type="button"
+              className="step-text step-repeat-toggle"
+              onClick={() => toggleGroup(step.groupId!)}
+              title={t(lang, expanded.has(step.groupId) ? 'tree.foldAgain' : 'tree.expand')}
+            >
+              {step.text} {expanded.has(step.groupId) ? '▾' : '▸'}
+            </button>
+          ) : (
+            <span className="step-text">{step.text}</span>
+          )}
+          {step.deltas.length > 0 && (
+            <span className="step-deltas">
+              {step.deltas.map((delta, deltaIndex) => (
+                <span className="step-delta" key={deltaIndex}>
+                  {delta}
+                </span>
+              ))}
+            </span>
+          )}
+        </li>
+      );
+    });
 
   return (
     <article className="shot-card" data-shot={index + 1}>
@@ -1158,42 +1220,7 @@ function ShotCard({
             {stepsOpen ? '▾' : '▸'} {t(lang, 'result.steps')}
           </button>
         </h4>
-        {stepsOpen && (
-          <ol className="step-list">
-            {flatStory.map(({ step, key }) => (
-              <li
-                key={key}
-                className={`step step-${step.tone}${step.pattern ? ' step-sequence' : ''}`}
-                style={{ marginLeft: step.depth * INDENT }}
-              >
-                {step.spell && <SpellIcon spell={step.spell} data={data} />}
-                {step.groupId ? (
-                  <button
-                    type="button"
-                    className="step-text step-repeat-toggle"
-                    onClick={() => toggleGroup(step.groupId!)}
-                    title={t(lang, expanded.has(step.groupId) ? 'tree.foldAgain' : 'tree.expand')}
-                  >
-                    {step.pattern ? '{ ' : ''}
-                    {step.text}
-                    {step.pattern ? ' }' : ''} {expanded.has(step.groupId) ? '▾' : '▸'}
-                  </button>
-                ) : (
-                  <span className="step-text">{step.text}</span>
-                )}
-                {step.deltas.length > 0 && (
-                  <span className="step-deltas">
-                    {step.deltas.map((delta, deltaIndex) => (
-                      <span className="step-delta" key={deltaIndex}>
-                        {delta}
-                      </span>
-                    ))}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
+        {stepsOpen && <ol className="step-list">{renderStorySteps(story)}</ol>}
       </section>
 
       <details className="shot-details">
