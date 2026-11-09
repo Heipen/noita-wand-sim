@@ -1274,6 +1274,41 @@ main {
   background: #8fb8e0;
 }
 
+.step-repeat {
+  color: #8fb8e0;
+}
+
+.step-repeat::before {
+  background: #8fb8e0;
+}
+
+.tree-heading {
+  margin: 0 0 6px;
+}
+
+.section-toggle {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.section-toggle:hover {
+  color: var(--text);
+}
+
+.tree-repeat {
+  margin-left: 4px;
+  border: 1px solid #3e5570;
+  border-radius: 999px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: #8fb8e0;
+}
+
 /* spell summary */
 
 .spell-summary {

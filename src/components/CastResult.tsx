@@ -102,6 +102,62 @@ function formatDeltas(delta: Record<string, number> | undefined, lang: Lang): st
   return out.slice(0, 4);
 }
 
+// --- repeat grouping ----------------------------------------------------------
+
+/** A cast-tree node whose identical consecutive siblings may be folded (count > 1). */
+interface GroupedNode {
+  node: CastTreeNode;
+  count: number;
+  signature: string;
+  children: GroupedNode[];
+}
+
+function nodeSignature(node: CastTreeNode): string {
+  switch (node.kind) {
+    case 'cast':
+      return `cast[${node.children.map(nodeSignature).join(',')}]`;
+    case 'drawBlock':
+      return `draw(${node.count},${node.instantReload})[${node.children.map(nodeSignature).join(',')}]`;
+    case 'drawCard':
+      return `card(${node.spellId ?? '-'},${node.ok})[${node.children.map(nodeSignature).join(',')}]`;
+    case 'action': {
+      const delta = node.delta ? JSON.stringify(Object.entries(node.delta).sort()) : '';
+      return `action(${node.id},${node.recursion ?? '-'},${node.iteration ?? '-'},${node.dontDraw},${
+        node.permanent
+      },${node.projectiles.join('|')},${delta})[${node.children.map(nodeSignature).join(',')}]`;
+    }
+    case 'trigger':
+      return `trigger(${node.triggerKind},${node.projectile ?? '-'})[${node.children.map(nodeSignature).join(',')}]`;
+    case 'discard':
+      return `discard(${node.spellId})`;
+    default:
+      return 'unknown';
+  }
+}
+
+function groupChildren(children: CastTreeNode[], foldRepeats: boolean): GroupedNode[] {
+  const out: GroupedNode[] = [];
+  for (const child of children) {
+    const signature = nodeSignature(child);
+    const last = out[out.length - 1];
+    if (foldRepeats && last && last.signature === signature) {
+      last.count += 1;
+      continue;
+    }
+    out.push({ node: child, count: 1, signature, children: groupChildren(child.children, foldRepeats) });
+  }
+  return out;
+}
+
+function groupTree(tree: CastTreeNode, foldRepeats: boolean): GroupedNode {
+  return {
+    node: tree,
+    count: 1,
+    signature: nodeSignature(tree),
+    children: groupChildren(tree.children, foldRepeats),
+  };
+}
+
 // --- spell summary -----------------------------------------------------------
 
 interface SummaryItem {
@@ -221,45 +277,50 @@ function SpellSummary({
 
 // --- tree view ---------------------------------------------------------------
 
-const INDENT = 14;
+function RepeatBadge({ group, lang }: { group: GroupedNode; lang: Lang }) {
+  if (group.count <= 1) return null;
+  return (
+    <span className="tree-repeat" title={t(lang, 'tree.repeatTitle', { count: group.count })}>
+      ×{group.count}
+    </span>
+  );
+}
 
 function TreeNodeView({
-  node,
-  depth,
+  group,
   data,
   lang,
   maps,
   showDeltas,
   parentDontDraw,
 }: {
-  node: CastTreeNode;
-  depth: number;
+  group: GroupedNode;
   data: GameData;
   lang: Lang;
   maps: SpellMaps;
   showDeltas: boolean;
   parentDontDraw?: boolean;
 }) {
-  const children = (extraDepth = 1, dontDrawContext = parentDontDraw ?? false) =>
-    node.children.map((child, index) => (
+  const node = group.node;
+  const children = () =>
+    group.children.map((child, index) => (
       <TreeNodeView
         key={index}
-        node={child}
-        depth={depth + extraDepth}
+        group={child}
         data={data}
         lang={lang}
         maps={maps}
         showDeltas={showDeltas}
-        parentDontDraw={dontDrawContext}
+        parentDontDraw={parentDontDraw}
       />
     ));
 
   switch (node.kind) {
     case 'cast':
-      return <>{children(0)}</>;
+      return <>{children()}</>;
     case 'drawBlock':
       return (
-        <div className="tree-node tree-drawblock" style={{ marginLeft: depth * INDENT }}>
+        <div className="tree-node tree-drawblock">
           <div className="tree-line">
             <span className="tree-tag">抽取</span>
             {parentDontDraw ? (
@@ -269,6 +330,7 @@ function TreeNodeView({
                 {node.count === 1 ? t(lang, 'tree.drawBlockOne') : t(lang, 'tree.drawBlock', { count: node.count })}
               </span>
             )}
+            <RepeatBadge group={group} lang={lang} />
           </div>
           {children()}
         </div>
@@ -278,7 +340,7 @@ function TreeNodeView({
       const name = spell ? spellName(spell, node.spellId ?? '', lang) : '';
       const failed = node.ok === false;
       return (
-        <div className="tree-node tree-drawcard" style={{ marginLeft: depth * INDENT }}>
+        <div className="tree-node tree-drawcard">
           <div className="tree-line">
             <SpellIcon spell={spell} data={data} />
             {node.spellId ? (
@@ -288,6 +350,7 @@ function TreeNodeView({
             ) : (
               <span className="tree-failed">{t(lang, 'tree.drawCardEmpty')}</span>
             )}
+            <RepeatBadge group={group} lang={lang} />
           </div>
           {children()}
         </div>
@@ -299,7 +362,7 @@ function TreeNodeView({
       const deltas = showDeltas ? formatDeltas(node.delta, lang) : [];
       const directCall = node.deckIndex === null && !node.permanent;
       return (
-        <div className="tree-node tree-action" style={{ marginLeft: depth * INDENT }}>
+        <div className="tree-node tree-action">
           <div className="tree-line">
             <SpellIcon spell={spell} data={data} />
             <span className="tree-action-name">
@@ -315,6 +378,7 @@ function TreeNodeView({
             {node.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
             {node.recursion !== null && <span className="tree-badge">{t(lang, 'tree.recursion', { n: node.recursion })}</span>}
             {node.iteration !== null && <span className="tree-badge">{t(lang, 'tree.iteration', { n: node.iteration })}</span>}
+            <RepeatBadge group={group} lang={lang} />
           </div>
           {deltas.length > 0 && (
             <div className="tree-deltas" style={{ marginLeft: 24 }}>
@@ -338,14 +402,26 @@ function TreeNodeView({
               })}
             </div>
           )}
-          {children(1, node.dontDraw)}
+          {node.dontDraw
+            ? group.children.map((child, index) => (
+                <TreeNodeView
+                  key={index}
+                  group={child}
+                  data={data}
+                  lang={lang}
+                  maps={maps}
+                  showDeltas={showDeltas}
+                  parentDontDraw
+                />
+              ))
+            : children()}
         </div>
       );
     }
     case 'trigger': {
       const projectileSpell = node.projectile ? maps.byEntity.get(node.projectile) : undefined;
       return (
-        <div className="tree-node tree-trigger" style={{ marginLeft: depth * INDENT }}>
+        <div className="tree-node tree-trigger">
           <div className="tree-line">
             <span className="tree-tag trigger">{t(lang, triggerLabel(node.triggerKind))}</span>
             <span>
@@ -354,6 +430,7 @@ function TreeNodeView({
                 kind: t(lang, triggerLabel(node.triggerKind)),
               })}
             </span>
+            <RepeatBadge group={group} lang={lang} />
           </div>
           {children()}
         </div>
@@ -362,10 +439,11 @@ function TreeNodeView({
     case 'discard': {
       const spell = maps.byId.get(node.spellId);
       return (
-        <div className="tree-node tree-discard" style={{ marginLeft: depth * INDENT }}>
+        <div className="tree-node tree-discard">
           <div className="tree-line">
             <SpellIcon spell={spell} data={data} />
             <span className="tree-failed">{t(lang, 'tree.discard', { name: spellName(spell, node.spellId, lang) })}</span>
+            <RepeatBadge group={group} lang={lang} />
           </div>
         </div>
       );
@@ -377,6 +455,8 @@ function TreeNodeView({
 
 // --- narrative ----------------------------------------------------------------
 
+const INDENT = 14;
+
 interface StoryStep {
   depth: number;
   tone: string;
@@ -385,17 +465,32 @@ interface StoryStep {
   deltas: string[];
 }
 
-function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas: boolean): StoryStep[] {
+function buildStory(root: GroupedNode, lang: Lang, maps: SpellMaps, showDeltas: boolean): StoryStep[] {
   const steps: StoryStep[] = [];
 
+  const pushRepeat = (count: number, depth: number) => {
+    if (count <= 1) return;
+    steps.push({ depth, tone: 'repeat', text: t(lang, 'tree.storyRepeat', { count }), deltas: [] });
+  };
+
+  const actionAnnotations = (node: Extract<CastTreeNode, { kind: 'action' }>): string => {
+    let text = '';
+    if (node.dontDraw) text += `（${t(lang, 'tree.dontDrawExplain')}）`;
+    if (node.permanent) text += `（${t(lang, 'tree.permanent')}）`;
+    if (node.recursion !== null) text += ` ${t(lang, 'tree.recursion', { n: node.recursion })}`;
+    if (node.iteration !== null) text += ` ${t(lang, 'tree.iteration', { n: node.iteration })}`;
+    return text;
+  };
+
   const walk = (
-    node: CastTreeNode,
+    group: GroupedNode,
     depth: number,
     context: { parentAction?: string; parentActionDontDraw?: boolean; inTrigger?: boolean },
   ): void => {
+    const node = group.node;
     switch (node.kind) {
       case 'cast':
-        node.children.forEach((child) => walk(child, 0, context));
+        group.children.forEach((child) => walk(child, 0, context));
         return;
       case 'drawBlock': {
         let text: string;
@@ -409,7 +504,7 @@ function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas:
           text = node.count === 1 ? t(lang, 'tree.storyDrawOne') : t(lang, 'tree.storyDraw', { count: node.count });
         }
         steps.push({ depth, tone: context.parentActionDontDraw ? 'fail' : 'draw', text, deltas: [] });
-        node.children.forEach((child) =>
+        group.children.forEach((child) =>
           walk(child, depth + 1, {
             ...context,
             parentAction: undefined,
@@ -417,11 +512,44 @@ function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas:
             inTrigger: undefined,
           }),
         );
+        pushRepeat(group.count, depth + 1);
         return;
       }
       case 'drawCard': {
         const spell = node.spellId ? maps.byId.get(node.spellId) : undefined;
         const name = spell ? spellName(spell, node.spellId ?? '', lang) : '';
+        // merge "drew X" and "call X" into one step when the card was played
+        const onlyChild = group.children.length === 1 ? group.children[0] : null;
+        if (onlyChild && onlyChild.node.kind === 'action' && node.ok !== false) {
+          const actionNode = onlyChild.node;
+          const actionSpell = maps.byId.get(actionNode.id);
+          const actionName = spellName(actionSpell, actionNode.id, lang);
+          steps.push({
+            depth,
+            tone: 'action',
+            text: `${t(lang, 'tree.storyDrawAndAction', { name: actionName })}${actionAnnotations(actionNode)}`,
+            spell: actionSpell,
+            deltas: showDeltas ? formatDeltas(actionNode.delta, lang) : [],
+          });
+          for (const entity of actionNode.projectiles) {
+            const projectileSpell = maps.byEntity.get(entity);
+            steps.push({
+              depth: depth + 1,
+              tone: 'projectile',
+              text: t(lang, 'tree.storyProjectile', { name: spellName(projectileSpell, entityLabel(entity), lang) }),
+              spell: projectileSpell,
+              deltas: [],
+            });
+          }
+          onlyChild.children.forEach((child) =>
+            walk(child, depth + 1, {
+              parentAction: actionName,
+              parentActionDontDraw: actionNode.dontDraw,
+            }),
+          );
+          pushRepeat(group.count, depth + 1);
+          return;
+        }
         if (node.ok === false) {
           steps.push({ depth, tone: 'fail', text: t(lang, 'tree.storyCardFailed', { name }), spell, deltas: [] });
         } else if (node.spellId) {
@@ -429,18 +557,15 @@ function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas:
         } else {
           steps.push({ depth, tone: 'fail', text: t(lang, 'tree.storyCardEmpty'), deltas: [] });
         }
-        node.children.forEach((child) => walk(child, depth + 1, context));
+        group.children.forEach((child) => walk(child, depth + 1, context));
+        pushRepeat(group.count, depth + 1);
         return;
       }
       case 'action': {
         const spell = maps.byId.get(node.id);
         const name = spellName(spell, node.id, lang);
         const direct = node.deckIndex === null && !node.permanent;
-        let text = direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name });
-        if (node.dontDraw) text += `（${t(lang, 'tree.dontDrawExplain')}）`;
-        if (node.permanent) text += `（${t(lang, 'tree.permanent')}）`;
-        if (node.recursion !== null) text += ` ${t(lang, 'tree.recursion', { n: node.recursion })}`;
-        if (node.iteration !== null) text += ` ${t(lang, 'tree.iteration', { n: node.iteration })}`;
+        const text = `${direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name })}${actionAnnotations(node)}`;
         steps.push({
           depth,
           tone: direct ? 'call' : 'action',
@@ -458,9 +583,10 @@ function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas:
             deltas: [],
           });
         }
-        node.children.forEach((child) =>
+        group.children.forEach((child) =>
           walk(child, depth + 1, { parentAction: name, parentActionDontDraw: node.dontDraw }),
         );
+        pushRepeat(group.count, depth + 1);
         return;
       }
       case 'trigger': {
@@ -474,7 +600,8 @@ function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas:
           }),
           deltas: [],
         });
-        node.children.forEach((child) => walk(child, depth + 1, { inTrigger: true }));
+        group.children.forEach((child) => walk(child, depth + 1, { inTrigger: true }));
+        pushRepeat(group.count, depth + 1);
         return;
       }
       case 'discard': {
@@ -486,6 +613,7 @@ function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas:
           spell,
           deltas: [],
         });
+        pushRepeat(group.count, depth + 1);
         return;
       }
       default:
@@ -493,7 +621,7 @@ function buildStory(tree: CastTreeNode, lang: Lang, maps: SpellMaps, showDeltas:
     }
   };
 
-  walk(tree, 0, {});
+  walk(root, 0, {});
   return steps;
 }
 
@@ -563,16 +691,20 @@ function ShotCard({
   data,
   lang,
   showDeltas,
+  foldRepeats,
 }: {
   shot: ShotResult;
   index: number;
   data: GameData;
   lang: Lang;
   showDeltas: boolean;
+  foldRepeats: boolean;
 }) {
   const maps = useSpellMaps(data);
+  const [treeOpen, setTreeOpen] = useState(true);
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
-  const story = useMemo(() => buildStory(shot.tree, lang, maps, showDeltas), [shot.tree, lang, maps, showDeltas]);
+  const grouped = useMemo(() => groupTree(shot.tree, foldRepeats), [shot.tree, foldRepeats]);
+  const story = useMemo(() => buildStory(grouped, lang, maps, showDeltas), [grouped, lang, maps, showDeltas]);
   const stateRows = STATE_ROWS.map((row) => {
     const value = shot.castState[row.key];
     return typeof value === 'number' && value !== 0 ? { ...row, value } : null;
@@ -596,14 +728,30 @@ function ShotCard({
 
       <div className="shot-columns">
         <section className="shot-tree">
-          <h4>{t(lang, 'result.tree')}</h4>
-          {stats.actions === 0 ? (
-            <p className="muted">{t(lang, 'result.noProjectiles')}</p>
-          ) : (
-            <div className="tree-root">
-              <TreeNodeView node={shot.tree} depth={0} data={data} lang={lang} maps={maps} showDeltas={showDeltas} />
-            </div>
-          )}
+          <h4 className="tree-heading">
+            <button
+              type="button"
+              className="section-toggle"
+              aria-expanded={treeOpen}
+              onClick={() => setTreeOpen((open) => !open)}
+            >
+              {treeOpen ? '▾' : '▸'} {t(lang, 'result.tree')}
+            </button>
+          </h4>
+          {treeOpen &&
+            (stats.actions === 0 ? (
+              <p className="muted">{t(lang, 'result.noProjectiles')}</p>
+            ) : (
+              <div className="tree-root">
+                <TreeNodeView
+                  group={grouped}
+                  data={data}
+                  lang={lang}
+                  maps={maps}
+                  showDeltas={showDeltas}
+                />
+              </div>
+            ))}
         </section>
         <section className="piles">
           <h4>{t(lang, 'result.piles')}</h4>
@@ -663,6 +811,7 @@ function ShotCard({
 
 export function CastResult({ result, data, lang, mode, onModeChange, simulating, error }: Props) {
   const [showDeltas, setShowDeltas] = useState(false);
+  const [foldRepeats, setFoldRepeats] = useState(true);
 
   return (
     <section className="panel cast-result">
@@ -681,7 +830,21 @@ export function CastResult({ result, data, lang, mode, onModeChange, simulating,
           ))}
         </div>
         <label className="deltas-toggle">
-          <input type="checkbox" checked={showDeltas} onChange={(event) => setShowDeltas(event.target.checked)} />
+          <input
+            type="checkbox"
+            data-toggle="fold"
+            checked={foldRepeats}
+            onChange={(event) => setFoldRepeats(event.target.checked)}
+          />
+          {t(lang, 'result.foldRepeats')}
+        </label>
+        <label className="deltas-toggle">
+          <input
+            type="checkbox"
+            data-toggle="deltas"
+            checked={showDeltas}
+            onChange={(event) => setShowDeltas(event.target.checked)}
+          />
           {t(lang, 'result.showDeltas')}
         </label>
         {simulating && <span className="simulating">{t(lang, 'result.simulating')}</span>}
@@ -693,7 +856,15 @@ export function CastResult({ result, data, lang, mode, onModeChange, simulating,
       {result && (
         <div className="shot-list">
           {result.shots.map((shot, index) => (
-            <ShotCard key={index} shot={shot} index={index} data={data} lang={lang} showDeltas={showDeltas} />
+            <ShotCard
+              key={index}
+              shot={shot}
+              index={index}
+              data={data}
+              lang={lang}
+              showDeltas={showDeltas}
+              foldRepeats={foldRepeats}
+            />
           ))}
         </div>
       )}

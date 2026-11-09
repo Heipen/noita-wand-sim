@@ -138,13 +138,13 @@ const summary = await waitFor(
 if (!summary.includes('携带修正') || !summary.includes('伤害增强 ×1')) throw new Error('missing modifier summary: ' + summary);
 const stepsText = await evaluate("document.querySelector('.step-list')?.innerText || ''");
 if (!stepsText.includes('抽取')) throw new Error('missing human steps: ' + stepsText);
-if (!stepsText.includes('执行「伤害增强」')) throw new Error('missing action explanation: ' + stepsText);
+if (!stepsText.includes('抽到并执行「伤害增强」')) throw new Error('missing action explanation: ' + stepsText);
 if (stepsText.includes('投射物伤害')) throw new Error('stat changes should be hidden by default: ' + stepsText);
-await evaluate("document.querySelector('.deltas-toggle input').click(); true");
+await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
 await sleep(300);
 const stepsWithDeltas = await evaluate("document.querySelector('.step-list')?.innerText || ''");
 if (!stepsWithDeltas.includes('投射物伤害')) throw new Error('toggle should reveal modifier deltas: ' + stepsWithDeltas);
-await evaluate("document.querySelector('.deltas-toggle input').click(); true");
+await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
 console.log('✓ modifier summary + steps, stat changes toggle works');
 
 // 4) divide-by-10 preset => 800 projectiles
@@ -168,7 +168,27 @@ const wikiStory = await evaluate("document.querySelector('.step-list')?.innerTex
 if (!wikiStory.includes('牌库已空')) throw new Error('story missing empty-deck draws: ' + wikiStory.slice(0, 400));
 if (!wikiStory.includes('禁抽')) throw new Error('story missing the don\'t-draw explanation: ' + wikiStory.slice(0, 400));
 if (!wikiStory.includes('弃掉')) throw new Error('story missing discard steps: ' + wikiStory.slice(0, 400));
-console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discard steps');
+const repeatBadge = await evaluate("(document.querySelector('.tree-repeat')?.innerText || '')");
+if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated siblings, got badge: ' + repeatBadge);
+if (!wikiStory.includes('重复 8 次')) throw new Error('story should fold repeated runs: ' + wikiStory.slice(0, 800));
+console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discards, repeat folding');
+
+// 4c) fold toggle + whole-tree collapse
+const foldedNodes = await evaluate("document.querySelectorAll('.tree-action').length");
+await evaluate("document.querySelector('input[data-toggle=fold]').click(); true");
+await sleep(300);
+const unfoldedNodes = await evaluate("document.querySelectorAll('.tree-action').length");
+if (unfoldedNodes <= foldedNodes) throw new Error('unfolding repeats should show more nodes');
+if ((await evaluate("document.querySelectorAll('.tree-repeat').length")) !== 0) throw new Error('repeat badges should disappear when unfolded');
+await evaluate("document.querySelector('input[data-toggle=fold]').click(); true");
+await sleep(300);
+await evaluate("document.querySelector('.section-toggle').click(); true");
+await sleep(200);
+if ((await evaluate("document.querySelectorAll('.tree-root').length")) !== 0) throw new Error('tree should collapse entirely');
+await evaluate("document.querySelector('.section-toggle').click(); true");
+await sleep(200);
+if ((await evaluate("document.querySelectorAll('.tree-root').length")) === 0) throw new Error('tree should expand again');
+console.log('✓ repeat folding toggle and whole-tree collapse work');
 
 // 5) in-game style tooltip on hover
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="COLOUR_RAINBOW"]'); el.scrollIntoView({ block: 'center' }); return true; })()`);
