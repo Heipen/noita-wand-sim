@@ -128,24 +128,30 @@ await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spe
 await waitFor(`document.querySelectorAll('.wand-slot.filled').length === ${filledBefore + 1}`, 15000, 'slot filled');
 console.log('✓ click-to-add works, filled slots:', await evaluate("document.querySelectorAll('.wand-slot.filled').length"));
 
-// 3b) modifier summary + casting steps; stat-change chips are hidden until toggled on
+// 3b) modifier summary (icons + tooltips) + casting steps; stat-change chips hidden until toggled on
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'double-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-const summary = await waitFor(
-  "document.querySelector('.spell-summary')?.innerText.includes('伤害增强') && document.querySelector('.spell-summary').innerText",
+await waitFor(
+  "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('伤害增强'))",
   60000,
   'modifier summary',
 );
-if (!summary.includes('携带修正') || !summary.includes('伤害增强 ×1')) throw new Error('missing modifier summary: ' + summary);
+const summaryTitles = await evaluate(
+  "({ proj: document.querySelector('.summary-proj')?.title || '', mods: [...document.querySelectorAll('.summary-mod')].map((el) => el.title) })",
+);
+if (!summaryTitles.proj.includes('火花弹')) throw new Error('summary projectile tooltip missing name: ' + JSON.stringify(summaryTitles));
+if (!summaryTitles.mods.some((title) => title.includes('伤害增强') && title.includes('×1')))
+  throw new Error('summary modifier tooltip missing name/count: ' + JSON.stringify(summaryTitles));
 const stepsText = await evaluate("document.querySelector('.step-list')?.innerText || ''");
 if (!stepsText.includes('抽取')) throw new Error('missing human steps: ' + stepsText);
 if (!stepsText.includes('抽到并执行「伤害增强」')) throw new Error('missing action explanation: ' + stepsText);
+if (!stepsText.includes('#')) throw new Error('steps should label wand slots: ' + stepsText);
 if (stepsText.includes('投射物伤害')) throw new Error('stat changes should be hidden by default: ' + stepsText);
 await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
 await sleep(300);
 const stepsWithDeltas = await evaluate("document.querySelector('.step-list')?.innerText || ''");
 if (!stepsWithDeltas.includes('投射物伤害')) throw new Error('toggle should reveal modifier deltas: ' + stepsWithDeltas);
 await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
-console.log('✓ modifier summary + steps, stat changes toggle works');
+console.log('✓ modifier summary icons + steps numbering/dont-draw + stat toggle');
 
 // 4) divide-by-10 preset => 800 projectiles
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -161,7 +167,11 @@ console.log('✓ divide-by-10 chain:', huge.replace(/\n/g, ' | '));
 
 // 4b) wiki example: D10 + DAMAGE + LIGHT_BULLET => 11 damage modifiers, one don't-draw copy
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("(document.querySelector('.spell-summary')?.innerText || '').includes('伤害增强 ×11')", 60000, 'wiki example modifiers');
+await waitFor(
+  "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('伤害增强') && (el.title || '').includes('×11'))",
+  60000,
+  'wiki example modifiers',
+);
 const wikiTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
 if (!wikiTree.includes('禁抽')) throw new Error('tree missing the don\'t-draw copy: ' + wikiTree.slice(0, 400));
 const wikiStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
@@ -176,11 +186,11 @@ console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explan
 // 4c) Tau + divide chain: the first copied divide wipes the deck, the second copies nothing
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'tau-divide-chain'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
 const tauSummary = await waitFor(
-  "document.querySelector('.spell-summary')?.innerText.includes('火花弹 ×32') && document.querySelector('.spell-summary').innerText",
+  "[...document.querySelectorAll('.summary-proj')].some((el) => (el.title || '').includes('火花弹') && el.innerText.includes('×32')) && 'tau ok'",
   60000,
   'tau divide chain summary',
 );
-if (!tauSummary.includes('火花弹 ×32')) throw new Error('tau chain should make 32 spark bolts: ' + tauSummary);
+if (tauSummary !== 'tau ok') throw new Error('tau chain should make 32 spark bolts');
 const tauTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
 if (!tauTree.includes('未复制任何法术')) throw new Error('tree should mark the empty copied divide: ' + tauTree.slice(0, 600));
 const tauStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
@@ -226,6 +236,79 @@ await sleep(200);
 if ((await evaluate("document.querySelectorAll('.tree-root').length")) === 0) throw new Error('tree should expand again');
 console.log('✓ repeat folding toggle and whole-tree collapse work');
 
+// 4d) casting steps collapse, compact picker without inner scroll, sticky wand editor
+await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
+await sleep(200);
+if ((await evaluate("document.querySelectorAll('.step-list').length")) !== 0) throw new Error('steps should collapse entirely');
+await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
+await sleep(200);
+const layoutInfo = await evaluate(`(() => {
+  const grid = document.querySelector('.picker-grid');
+  const editor = document.querySelector('.wand-editor');
+  return {
+    pickerOverflow: grid ? getComputedStyle(grid).overflowY : 'missing',
+    editorPosition: editor ? getComputedStyle(editor).position : 'missing',
+    englishSubtitles: document.querySelectorAll('.spell-card-compact .spell-subtitle').length,
+    slotNumbers: document.querySelectorAll('.wand-slot .slot-number').length,
+  };
+})()`);
+if (layoutInfo.pickerOverflow !== 'visible') throw new Error('picker should not have an inner scroll: ' + JSON.stringify(layoutInfo));
+if (layoutInfo.editorPosition !== 'sticky') throw new Error('wand editor should stay visible while scrolling (sticky): ' + JSON.stringify(layoutInfo));
+if (layoutInfo.englishSubtitles !== 0) throw new Error('compact spell cards should hide the English subtitle');
+if (layoutInfo.slotNumbers === 0) throw new Error('wand slots should be numbered');
+console.log('✓ steps collapse, compact picker, sticky wand editor, slot numbers');
+
+// 4e) capacity above 26, clearing keeps wand stats, saving a named preset
+const setNumberInput = `(index, value) => {
+  const input = document.querySelectorAll('.wand-stats input[type=number]')[index];
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  setter.call(input, String(value));
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}`;
+await evaluate(`(${setNumberInput})(1, 40); true`);
+await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 40", 10000, 'capacity 40 slots');
+const statsBefore = await evaluate(`(() => {
+  const inputs = [...document.querySelectorAll('.wand-stats input[type=number]')];
+  return inputs.map((input) => input.value);
+})()`);
+const clearButtons = await evaluate(
+  "[...document.querySelectorAll('.wand-toolbar button')].findIndex((el) => el.innerText.includes('清空魔杖'))",
+);
+await evaluate(`document.querySelectorAll('.wand-toolbar button')[${clearButtons}].click(); true`);
+await sleep(300);
+const statsAfter = await evaluate(`(() => {
+  const inputs = [...document.querySelectorAll('.wand-stats input[type=number]')];
+  return inputs.map((input) => input.value);
+})()`);
+if (JSON.stringify(statsBefore) !== JSON.stringify(statsAfter)) throw new Error('clearing must keep wand stats: ' + JSON.stringify({ statsBefore, statsAfter }));
+if ((await evaluate("document.querySelectorAll('.wand-slots .wand-slot.filled').length")) !== 0) throw new Error('clearing should empty the wand slots');
+if (statsAfter[1] !== '40') throw new Error('capacity should stay 40 after clearing');
+
+await evaluate(`(() => {
+  const input = document.querySelector('.wand-name');
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  setter.call(input, '测试预设');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+})()`);
+const saveIndex = await evaluate(
+  "[...document.querySelectorAll('.wand-toolbar button')].findIndex((el) => el.innerText.includes('保存为预设'))",
+);
+await evaluate(`document.querySelectorAll('.wand-toolbar button')[${saveIndex}].click(); true`);
+await sleep(400);
+const presetOptions = await evaluate("[...document.querySelectorAll('.preset-select option')].map((o) => o.textContent)");
+if (!presetOptions.some((text) => text.includes('测试预设'))) throw new Error('saved preset missing: ' + JSON.stringify(presetOptions));
+await send('Page.reload');
+await sleep(700);
+await waitFor("document.querySelector('.stats-bar')?.innerText.includes('422')", 60000, 'reload after preset save');
+const presetOptionsAfterReload = await evaluate("[...document.querySelectorAll('.preset-select option')].map((o) => o.textContent)");
+if (!presetOptionsAfterReload.some((text) => text.includes('测试预设'))) throw new Error('saved preset did not persist: ' + JSON.stringify(presetOptionsAfterReload));
+console.log('✓ capacity >26, clear keeps stats, named preset saved and persisted');
+
+// restore a wand with spells for the remaining checks
+await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'trigger-bomb'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await waitFor("!!document.querySelector('.shot-card')", 60000, 'wand restored after reload');
+
 // 5) in-game style tooltip on hover
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="COLOUR_RAINBOW"]'); el.scrollIntoView({ block: 'center' }); return true; })()`);
 await sleep(300);
@@ -269,7 +352,11 @@ console.log('✓ i18n toggle works');
 await send('Page.reload', {});
 await waitFor("(document.querySelector('.stats-bar')?.innerText || '').includes('422')", 60000, 'reload before screenshots');
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("(document.querySelector('.spell-summary')?.innerText || '').includes('伤害增强 ×11')", 60000, 'wiki example preset');
+await waitFor(
+  "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('伤害增强') && (el.title || '').includes('×11'))",
+  60000,
+  'wiki example preset',
+);
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });
 await sleep(300);
 const topShot = await send('Page.captureScreenshot', { format: 'png' });

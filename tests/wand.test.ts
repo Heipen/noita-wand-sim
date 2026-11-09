@@ -12,6 +12,7 @@ import {
   swapSlots,
   toEngineWand,
   wandSlots,
+  MAX_CAPACITY,
 } from '../src/lib/wand';
 
 describe('frames formatting', () => {
@@ -60,7 +61,7 @@ describe('wand helpers', () => {
   it('clamps capacity and action counts', () => {
     const wand = createDefaultWand();
     const config = toEngineWand({ ...wand, capacity: 999, actionsPerRound: 0, rechargeFrames: -5 });
-    expect(config.deck_capacity).toBe(26);
+    expect(config.deck_capacity).toBe(MAX_CAPACITY);
     expect(config.actions_per_round).toBe(1);
     expect(config.reload_time).toBe(0);
   });

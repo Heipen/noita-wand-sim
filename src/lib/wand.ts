@@ -1,6 +1,6 @@
 import type { WandConfig } from '../engine/types';
 
-export const MAX_CAPACITY = 26;
+export const MAX_CAPACITY = 100;
 export const MAX_ALWAYS_CAST = 4;
 
 export interface WandState {
@@ -48,6 +48,14 @@ export function createDefaultWand(): WandState {
   wand.spells[0] = 'LIGHT_BULLET_TRIGGER';
   wand.spells[1] = 'BOMB';
   return wand;
+}
+
+/** Empty the wand's spell slots but keep its stats (capacity, delays, mana, name, ...). */
+export function clearSpells(wand: WandState): WandState {
+  return normalizeWand({
+    ...wand,
+    spells: Array.from({ length: MAX_CAPACITY }, () => null),
+  });
 }
 
 export function normalizeWand(wand: WandState): WandState {

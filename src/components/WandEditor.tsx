@@ -1,29 +1,40 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { PRESETS } from '../data/presets';
 import { formatFramesAsSeconds } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
 import { t } from '../lib/i18n';
 import type { GameData, Lang, SpellMeta } from '../lib/types';
 import {
+  clearSpells,
   createEmptyWand,
   filledSlots,
+  normalizeWand,
   placeSpell,
   setAlwaysCast,
   swapSlots,
   wandSlots,
-  normalizeWand,
   MAX_ALWAYS_CAST,
+  MAX_CAPACITY,
   type WandState,
 } from '../lib/wand';
 import type { HoverHandlers } from './SpellCard';
+
+export interface CustomPreset {
+  id: string;
+  name: string;
+  wand: WandState;
+}
 
 interface Props {
   data: GameData;
   lang: Lang;
   wand: WandState;
   hover: HoverHandlers;
+  customPresets: CustomPreset[];
   onChange: (wand: WandState) => void;
   onShare: () => void;
+  onSavePreset: (name: string, wand: WandState) => void;
+  onDeletePreset: (id: string) => void;
   copied: boolean;
 }
 
@@ -65,10 +76,23 @@ function NumberField({
   );
 }
 
-export function WandEditor({ data, lang, wand, hover, onChange, onShare, copied }: Props) {
+export function WandEditor({
+  data,
+  lang,
+  wand,
+  hover,
+  customPresets,
+  onChange,
+  onShare,
+  onSavePreset,
+  onDeletePreset,
+  copied,
+}: Props) {
   const spellById = useMemo(() => new Map(data.spells.map((spell) => [spell.id, spell])), [data.spells]);
+  const [selectedPreset, setSelectedPreset] = useState('');
   const slots = wandSlots(wand);
   const used = filledSlots(wand);
+  const selectedCustom = customPresets.some((preset) => preset.id === selectedPreset);
 
   const update = (patch: Partial<WandState>) => onChange(normalizeWand({ ...wand, ...patch }));
 
@@ -95,6 +119,7 @@ export function WandEditor({ data, lang, wand, hover, onChange, onShare, copied 
     const icon = spell ? spellIconUrl(data, spell) : undefined;
     return (
       <>
+        <span className="slot-number">{index + 1}</span>
         {icon ? <img src={icon} alt="" draggable={false} /> : <span className="slot-index">{id.slice(0, 2)}</span>}
         <button
           type="button"
@@ -112,6 +137,8 @@ export function WandEditor({ data, lang, wand, hover, onChange, onShare, copied 
     );
   };
 
+  const presetName = () => wand.name.trim() || t(lang, 'editor.defaultPresetName');
+
   return (
     <section className="panel wand-editor">
       <header className="panel-header">
@@ -124,18 +151,37 @@ export function WandEditor({ data, lang, wand, hover, onChange, onShare, copied 
       <div className="wand-toolbar">
         <select
           className="preset-select"
-          value=""
+          value={selectedPreset}
           onChange={(event) => {
-            const preset = PRESETS.find((item) => item.id === event.target.value);
-            if (preset) onChange(preset.wand);
+            const value = event.target.value;
+            setSelectedPreset(value);
+            if (!value) return;
+            const builtIn = PRESETS.find((item) => item.id === value);
+            if (builtIn) {
+              onChange(builtIn.wand);
+              return;
+            }
+            const custom = customPresets.find((item) => item.id === value);
+            if (custom) onChange(custom.wand);
           }}
         >
           <option value="">{t(lang, 'editor.presets')}…</option>
-          {PRESETS.map((preset) => (
-            <option key={preset.id} value={preset.id}>
-              {lang === 'zh' ? preset.nameZh : preset.nameEn}
-            </option>
-          ))}
+          <optgroup label={t(lang, 'editor.builtinPresets')}>
+            {PRESETS.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {lang === 'zh' ? preset.nameZh : preset.nameEn}
+              </option>
+            ))}
+          </optgroup>
+          {customPresets.length > 0 && (
+            <optgroup label={t(lang, 'editor.myPresets')}>
+              {customPresets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
         <input
           className="wand-name"
@@ -144,7 +190,29 @@ export function WandEditor({ data, lang, wand, hover, onChange, onShare, copied 
           value={wand.name}
           onChange={(event) => update({ name: event.target.value })}
         />
-        <button type="button" className="secondary small" onClick={() => onChange(createEmptyWand())}>
+        <button type="button" className="secondary small" onClick={() => onSavePreset(presetName(), wand)}>
+          {t(lang, 'editor.savePreset')}
+        </button>
+        {selectedCustom && (
+          <button
+            type="button"
+            className="secondary small"
+            onClick={() => {
+              onDeletePreset(selectedPreset);
+              setSelectedPreset('');
+            }}
+          >
+            {t(lang, 'editor.deletePreset')}
+          </button>
+        )}
+        <button
+          type="button"
+          className="secondary small"
+          onClick={() => {
+            setSelectedPreset('');
+            onChange(clearSpells(wand));
+          }}
+        >
           {t(lang, 'editor.clear')}
         </button>
       </div>
@@ -216,7 +284,7 @@ export function WandEditor({ data, lang, wand, hover, onChange, onShare, copied 
           label={t(lang, 'editor.spellsPerCast')}
           value={wand.actionsPerRound}
           min={1}
-          max={26}
+          max={MAX_CAPACITY}
           step={1}
           onChange={(value) => update({ actionsPerRound: value })}
         />
@@ -224,7 +292,7 @@ export function WandEditor({ data, lang, wand, hover, onChange, onShare, copied 
           label={t(lang, 'editor.capacity')}
           value={wand.capacity}
           min={1}
-          max={26}
+          max={MAX_CAPACITY}
           step={1}
           onChange={(value) => update({ capacity: value })}
         />

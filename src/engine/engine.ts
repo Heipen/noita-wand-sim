@@ -108,6 +108,7 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
           type: 'discard',
           spellId: String(entry[1]),
           discardedCount: Number(entry[2]),
+          sourceAction: entry[3] === undefined ? null : String(entry[3]),
         });
         break;
       case 'action': {

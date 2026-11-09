@@ -47,9 +47,9 @@ export function SpellCard({ spell, data, lang, variant = 'picker', draggable = t
       </span>
       <span className="spell-text">
         <span className="spell-title">{title}</span>
-        <span className="spell-subtitle">{subtitle}</span>
+        {variant !== 'compact' && <span className="spell-subtitle">{subtitle}</span>}
         <span className="spell-meta">
-          <span className="badge type">{spellTypeLabel(lang, spell.type)}</span>
+          {variant !== 'compact' && <span className="badge type">{spellTypeLabel(lang, spell.type)}</span>}
           {spell.mana !== null && (
             <span className="badge mana">
               {t(lang, 'spell.mana')} {spell.mana}

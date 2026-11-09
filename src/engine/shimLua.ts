@@ -290,7 +290,7 @@ function __install_hooks()
   table.insert = function(list, a, b)
     local value = b ~= nil and b or a
     if (not __inside_draw_action) and list == discarded and type(value) == 'table' and value.id then
-      __ev('discard', value.id, #discarded)
+      __ev('discard', value.id, #discarded, __current_action_id)
     end
     if b ~= nil then
       return orig_table_insert(list, a, b)
@@ -314,13 +314,15 @@ function __install_hooks()
         dont_draw_actions == true,
         playing_permanent_card == true
       )
+      local previous_action = __current_action_id
+      __current_action_id = action.id
       local result = original(recursion_level, iteration)
+      __current_action_id = previous_action
       __events[eventIndex][6] = __state_delta(before)
       __ev('callActionEnd')
       return result
     end
   end
-
   -- 2) draw machinery: draw block begin/end + one event per draw attempt.
   local orig_draw_action = draw_action
   function draw_action(instant_reload_if_empty)

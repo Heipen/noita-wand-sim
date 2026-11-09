@@ -4,7 +4,7 @@ import { ImportPanel } from './components/ImportPanel';
 import { SpellPicker } from './components/SpellPicker';
 import { SpellTooltip } from './components/SpellTooltip';
 import { StatsBar } from './components/StatsBar';
-import { WandEditor } from './components/WandEditor';
+import { WandEditor, type CustomPreset } from './components/WandEditor';
 import { useSpellTooltip } from './hooks/useSpellTooltip';
 import { loadBundledData } from './lib/bundledData';
 import {
@@ -25,6 +25,7 @@ import {
   decodeWandFromQuery,
   encodeWandToQuery,
   firstEmptySlot,
+  normalizeWand,
   placeSpell,
   shareUrlForWand,
   toEngineWand,
@@ -34,6 +35,7 @@ import type { GameData, Lang } from './lib/types';
 
 const LANG_KEY = 'noita-wand-sim.lang';
 const PREFER_LOCAL_KEY = 'noita-wand-sim.preferLocal';
+const PRESETS_KEY = 'noita-wand-sim.presets';
 
 type Phase = 'boot' | 'empty' | 'loading' | 'ready';
 type SimMode = 'single' | 'untilReload';
@@ -56,8 +58,28 @@ function readInitialWand(): WandState {
   return createDefaultWand();
 }
 
-function prefersLocalData(): boolean {
+function readCustomPresets(): CustomPreset[] {
   try {
+    const raw = localStorage.getItem(PRESETS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (item): item is CustomPreset =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          typeof (item as CustomPreset).id === 'string' &&
+          typeof (item as CustomPreset).name === 'string' &&
+          Boolean((item as CustomPreset).wand),
+      )
+      .map((item) => ({ ...item, wand: normalizeWand(item.wand) }));
+  } catch {
+    return [];
+  }
+}
+
+function prefersLocalData(): boolean {  try {
     return localStorage.getItem(PREFER_LOCAL_KEY) === '1';
   } catch {
     return false;
@@ -95,6 +117,7 @@ export default function App() {
   const [data, setData] = useState<GameData | null>(null);
   const [bundled, setBundled] = useState<GameData | null>(null);
   const [wand, setWand] = useState<WandState>(readInitialWand);
+  const [customPresets, setCustomPresets] = useState<CustomPreset[]>(readCustomPresets);
   const [mode, setMode] = useState<SimMode>('single');
   const [result, setResult] = useState<Awaited<ReturnType<typeof simulateWand>> | null>(null);
   const [simulating, setSimulating] = useState(false);
@@ -169,6 +192,32 @@ export default function App() {
       configureEngineScripts(undefined);
     }
   }, [data]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PRESETS_KEY, JSON.stringify(customPresets));
+    } catch {
+      /* ignore */
+    }
+  }, [customPresets]);
+
+  const savePreset = useCallback(
+    (name: string, presetWand: WandState) => {
+      const finalName = name.trim() || t(lang, 'editor.defaultPresetName');
+      const preset: CustomPreset = {
+        id: `custom-${Date.now()}`,
+        name: finalName,
+        wand: normalizeWand({ ...presetWand, name: finalName }),
+      };
+      setCustomPresets((presets) => [preset, ...presets.filter((item) => item.name !== finalName)]);
+      setWand(preset.wand);
+    },
+    [lang],
+  );
+
+  const deletePreset = useCallback((id: string) => {
+    setCustomPresets((presets) => presets.filter((preset) => preset.id !== id));
+  }, []);
 
   // Debounced simulation whenever the wand or mode changes.
   useEffect(() => {
@@ -346,8 +395,11 @@ export default function App() {
                 lang={lang}
                 wand={wand}
                 hover={{ show: showTooltip, hide: hideTooltip }}
+                customPresets={customPresets}
                 onChange={setWand}
                 onShare={() => void share()}
+                onSavePreset={savePreset}
+                onDeletePreset={deletePreset}
                 copied={copied}
               />
               <SpellPicker
@@ -364,6 +416,7 @@ export default function App() {
                 onModeChange={setMode}
                 simulating={simulating}
                 error={simError}
+                wandSpells={wand.spells.slice(0, wand.capacity)}
               />
             </div>
           </>
