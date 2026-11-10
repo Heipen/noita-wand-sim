@@ -35,6 +35,9 @@ interface Props {
   onSavePreset: (name: string, wand: WandState) => void;
   onDeletePreset: (id: string) => void;
   copied: boolean;
+  alwaysCastTarget?: number | null;
+  onAlwaysSlotClick?: (index: number) => void;
+  onCancelAlwaysCast?: () => void;
 }
 
 function NumberField({
@@ -113,6 +116,9 @@ export function WandEditor({
   onSavePreset,
   onDeletePreset,
   copied,
+  alwaysCastTarget = null,
+  onAlwaysSlotClick,
+  onCancelAlwaysCast,
 }: Props) {
   const spellById = useMemo(() => new Map(data.spells.map((spell) => [spell.id, spell])), [data.spells]);
   const [selectedPreset, setSelectedPreset] = useState('');
@@ -200,6 +206,14 @@ export function WandEditor({
         <div className="always-cast">
           <span className="field-label">{t(lang, 'editor.alwaysCast')}</span>
           <div className="always-slots">
+            {alwaysCastTarget !== null && (
+              <span className="always-target-hint">
+                {t(lang, 'picker.alwaysTarget', { n: alwaysCastTarget + 1 })}
+                <button type="button" className="link-button" onClick={onCancelAlwaysCast}>
+                  {t(lang, 'picker.cancelTarget')}
+                </button>
+              </span>
+            )}
             {Array.from({ length: MAX_ALWAYS_CAST }, (_, index) => {
               const id = wand.alwaysCast[index] ?? null;
               const spell: SpellMeta | undefined = id ? spellById.get(id) : undefined;
@@ -207,9 +221,10 @@ export function WandEditor({
               return (
                 <div
                   key={index}
-                  className={`wand-slot always-slot${id ? ' filled' : ''}`}
+                  className={`wand-slot always-slot${id ? ' filled' : ''}${alwaysCastTarget === index ? ' targeted' : ''}`}
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => onDropToAlways(index, event)}
+                  onClick={() => onAlwaysSlotClick?.(index)}
                   onPointerEnter={(event) => {
                     if (spell) hover.show(event, spell);
                   }}
@@ -221,7 +236,10 @@ export function WandEditor({
                       <button
                         type="button"
                         className="slot-remove"
-                        onClick={() => onChange(setAlwaysCast(wand, index, null))}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onChange(setAlwaysCast(wand, index, null));
+                        }}
                       >
                         ×
                       </button>
@@ -233,6 +251,7 @@ export function WandEditor({
               );
             })}
           </div>
+          <span className="always-cast-tap-hint">{t(lang, 'editor.alwaysCastTapHint')}</span>
         </div>
       </section>
 

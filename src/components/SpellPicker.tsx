@@ -9,9 +9,18 @@ interface Props {
   lang: Lang;
   hover: HoverHandlers;
   onAdd: (spellId: string) => void;
+  alwaysCastTarget?: number | null;
+  onCancelAlwaysCast?: () => void;
 }
 
-export function SpellPicker({ data, lang, hover, onAdd }: Props) {
+export function SpellPicker({
+  data,
+  lang,
+  hover,
+  onAdd,
+  alwaysCastTarget = null,
+  onCancelAlwaysCast,
+}: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<SpellType | 'all'>('all');
 
@@ -35,6 +44,14 @@ export function SpellPicker({ data, lang, hover, onAdd }: Props) {
         <h2>{t(lang, 'picker.title')}</h2>
         <span className="panel-sub">{t(lang, 'picker.hint')}</span>
       </header>
+      {alwaysCastTarget !== null && (
+        <div className="picker-target-hint">
+          <span>{t(lang, 'picker.alwaysTarget', { n: alwaysCastTarget + 1 })}</span>
+          <button type="button" className="secondary" onClick={onCancelAlwaysCast}>
+            {t(lang, 'picker.cancelTarget')}
+          </button>
+        </div>
+      )}
       <Toolbar
         lang={lang}
         query={query}

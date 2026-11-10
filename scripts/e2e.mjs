@@ -158,6 +158,22 @@ await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spe
 await waitFor(`document.querySelectorAll('.wand-slot.filled').length === ${filledBefore + 1}`, 15000, 'slot filled');
 console.log('✓ click-to-add works, filled slots:', await evaluate("document.querySelectorAll('.wand-slot.filled').length"));
 
+// 3a) tapping an Always Cast slot targets it, then tapping a spell places it there (mobile flow)
+await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
+await waitFor(
+  "!!document.querySelector('.always-slot.targeted') && !!document.querySelector('.picker-target-hint')",
+  10000,
+  'always cast targeting',
+);
+await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.scrollIntoView({ block: 'center' }); el.click(); return true; })()`);
+await waitFor("document.querySelectorAll('.always-slot.filled').length === 1", 10000, 'always cast filled');
+if ((await evaluate("document.querySelectorAll('.picker-target-hint').length")) !== 0) {
+  throw new Error('always-cast targeting hint should disappear after choosing a spell');
+}
+await evaluate("document.querySelector('.always-slot.filled .slot-remove').click(); true");
+await waitFor("document.querySelectorAll('.always-slot.filled').length === 0", 10000, 'always cast cleared');
+console.log('✓ tap-to-target Always Cast works');
+
 // 3b) modifier summary (icons + tooltips) + casting steps; stat-change chips hidden until toggled on
 await loadWand(['DAMAGE', 'LIGHT_BULLET', 'LIGHT_BULLET'], {
   actionsPerRound: 2,
