@@ -3,7 +3,6 @@ import { CastResult } from './components/CastResult';
 import { ImportPanel } from './components/ImportPanel';
 import { SpellPicker } from './components/SpellPicker';
 import { SpellTooltip } from './components/SpellTooltip';
-import { StatsBar } from './components/StatsBar';
 import { WandEditor, type CustomPreset } from './components/WandEditor';
 import { useSpellTooltip } from './hooks/useSpellTooltip';
 import { loadBundledData } from './lib/bundledData';
@@ -375,21 +374,7 @@ export default function App() {
         )}
 
         {phase === 'ready' && data && (
-          <>
-            <StatsBar
-              data={data}
-              lang={lang}
-              onUseLocal={() => {
-                setError(null);
-                setPhase('empty');
-              }}
-              onUseBundled={data.origin === 'local' ? () => void useBundled() : null}
-              onReimport={() => {
-                setError(null);
-                setPhase('empty');
-              }}
-            />
-            <div className="sim-layout">
+          <div className="sim-layout">
               <WandEditor
                 data={data}
                 lang={lang}
@@ -419,13 +404,43 @@ export default function App() {
                 wandSpells={wand.spells.slice(0, wand.capacity)}
               />
             </div>
-          </>
         )}
       </main>
 
       {data && <SpellTooltip tooltip={tooltip} data={data} lang={lang} />}
       <footer className="app-footer">
         <p className="footer-note">{t(lang, 'footer.note')}</p>
+        {phase === 'ready' && data && (
+          <p className="footer-data-actions">
+            {data.origin === 'local' ? (
+              <button type="button" className="link-button use-bundled" onClick={() => void useBundled()}>
+                {t(lang, 'stats.useBundled')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="link-button use-local"
+                onClick={() => {
+                  setError(null);
+                  setPhase('empty');
+                }}
+              >
+                {t(lang, 'stats.useLocal')}
+              </button>
+            )}
+            <span className="footer-sep">·</span>
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setError(null);
+                setPhase('empty');
+              }}
+            >
+              {t(lang, 'stats.reimport')}
+            </button>
+          </p>
+        )}
         <p className="footer-meta">
           <span>{t(lang, 'footer.madeWith')}</span>
           <span className="footer-sep">·</span>

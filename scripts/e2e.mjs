@@ -107,7 +107,7 @@ await send('Page.reload');
 await sleep(700);
 
 // 1) bundled data
-const stats = await waitFor("document.querySelector('.stats-bar')?.innerText || ''", 60000, 'stats bar');
+const stats = await waitFor("document.querySelector('.count')?.innerText || ''", 60000, 'bundled spell count');
 console.log('✓ bundled data:', stats.replace(/\n/g, ' | '));
 if (!/422/.test(stats)) throw new Error('expected 422 spells');
 const footerInfo = await evaluate(
@@ -364,7 +364,7 @@ const presetOptions = await evaluate("[...document.querySelectorAll('.preset-sel
 if (!presetOptions.some((text) => text.includes('测试预设'))) throw new Error('saved preset missing: ' + JSON.stringify(presetOptions));
 await send('Page.reload');
 await sleep(700);
-await waitFor("document.querySelector('.stats-bar')?.innerText.includes('422')", 60000, 'reload after preset save');
+await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'reload after preset save');
 const presetOptionsAfterReload = await evaluate("[...document.querySelectorAll('.preset-select option')].map((o) => o.textContent)");
 if (!presetOptionsAfterReload.some((text) => text.includes('测试预设'))) throw new Error('saved preset did not persist: ' + JSON.stringify(presetOptionsAfterReload));
 console.log('✓ capacity >26, clear keeps stats, named preset saved and persisted');
@@ -393,7 +393,7 @@ const input = await send('DOM.querySelector', { nodeId: doc.root.nodeId, selecto
 if (!input.nodeId) throw new Error('file input not found');
 await send('DOM.setFileInputFiles', { files: [WAK, CSV], nodeId: input.nodeId });
 const localStats = await waitFor(
-  "(document.querySelector('.stats-bar')?.innerText || '').includes('data.wak') && document.querySelector('.stats-bar').innerText",
+  "!!document.querySelector('.use-bundled') && (document.querySelector('.count')?.innerText || '')",
   180000,
   'local import',
 );
@@ -402,7 +402,7 @@ console.log('✓ local import + engine restart:', localStats.replace(/\n/g, ' | 
 
 // 7) back to bundled + i18n toggle
 await evaluate("document.querySelector('.use-bundled').click()");
-await waitFor("(document.querySelector('.stats-bar')?.innerText || '').includes('内置')", 30000, 'back to bundled');
+await waitFor("!!document.querySelector('.use-local')", 30000, 'back to bundled');
 await evaluate("document.querySelector('.lang-switch').click()");
 await sleep(300);
 const titleEn = await evaluate("document.querySelector('h1').innerText");
@@ -414,7 +414,7 @@ console.log('✓ i18n toggle works');
 // 8) screenshots: the wiki preload example — tree view and the narrative below it
 // reload first so the hover tooltip from step 5 cannot linger in the screenshots
 await send('Page.reload', {});
-await waitFor("(document.querySelector('.stats-bar')?.innerText || '').includes('422')", 60000, 'reload before screenshots');
+await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'reload before screenshots');
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
 await waitFor(
   "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('伤害增强') && (el.title || '').includes('×11'))",
