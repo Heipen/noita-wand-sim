@@ -2,6 +2,9 @@ export function framesToSeconds(frames: number): number {
   return frames / 60;
 }
 
+/** Internal Noita damage values are shown in the in-game UI at 25x (0.4 → +10). */
+export const DAMAGE_DISPLAY_SCALE = 25;
+
 /** Format a frame count as the seconds value shown by the game ("-0.13", "0.17", "0"). */
 export function formatFramesAsSeconds(frames: number, opts: { signed?: boolean } = {}): string {
   const seconds = frames / 60;

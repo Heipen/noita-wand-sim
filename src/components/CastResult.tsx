@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { CastTreeNode, EngineEvent, ShotResult, SimulationResult } from '../engine/types';
-import { formatFramesAsSeconds, formatNumber } from '../lib/format';
+import { DAMAGE_DISPLAY_SCALE, formatFramesAsSeconds, formatNumber } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
 import { t } from '../lib/i18n';
 import type { GameData, Lang, SpellMeta } from '../lib/types';
@@ -78,11 +78,11 @@ function triggerLabel(kind: 'timer' | 'hitWorld' | 'death'): string {
   return 'result.triggerHitWorld';
 }
 
-const DELTA_FORMATS: Record<string, { label: string; kind: 'seconds' | 'number' | 'percent' | 'degrees' | 'multiplier' }> = {
+const DELTA_FORMATS: Record<string, { label: string; kind: 'seconds' | 'number' | 'percent' | 'degrees' | 'multiplier' | 'damage' }> = {
   fire_rate_wait: { label: 'delta.castDelay', kind: 'seconds' },
   reload_time: { label: 'delta.recharge', kind: 'seconds' },
-  damage_projectile_add: { label: 'delta.damageProjectile', kind: 'number' },
-  damage_explosion_add: { label: 'delta.damageExplosion', kind: 'number' },
+  damage_projectile_add: { label: 'delta.damageProjectile', kind: 'damage' },
+  damage_explosion_add: { label: 'delta.damageExplosion', kind: 'damage' },
   damage_critical_chance: { label: 'delta.critChance', kind: 'percent' },
   spread_degrees: { label: 'delta.spread', kind: 'degrees' },
   speed_multiplier: { label: 'delta.speed', kind: 'multiplier' },
@@ -109,6 +109,9 @@ function formatDeltas(delta: Record<string, number> | undefined, lang: Lang): st
     switch (format.kind) {
       case 'seconds':
         rendered = `${signed(formatFramesAsSeconds(value))}s`;
+        break;
+      case 'damage':
+        rendered = signed(formatNumber(value * DAMAGE_DISPLAY_SCALE));
         break;
       case 'percent':
         rendered = `${signed(formatNumber(value))}%`;
@@ -472,10 +475,10 @@ function CessationLifetimeBadge({
 
 const SUMMARY_STATE_ROWS: {
   key: string;
-  format: 'seconds' | 'percent' | 'multiplier' | 'degrees' | 'number';
+  format: 'seconds' | 'percent' | 'multiplier' | 'degrees' | 'number' | 'damage';
 }[] = [
-  { key: 'damage_projectile_add', format: 'number' },
-  { key: 'damage_explosion_add', format: 'number' },
+  { key: 'damage_projectile_add', format: 'damage' },
+  { key: 'damage_explosion_add', format: 'damage' },
   { key: 'damage_critical_chance', format: 'percent' },
   { key: 'spread_degrees', format: 'degrees' },
   { key: 'speed_multiplier', format: 'multiplier' },
@@ -491,6 +494,10 @@ function stateValue(
 ): string {
   if (format === 'seconds') {
     const text = formatFramesAsSeconds(value);
+    return signed && value > 0 ? `+${text}` : text;
+  }
+  if (format === 'damage') {
+    const text = formatNumber(value * DAMAGE_DISPLAY_SCALE);
     return signed && value > 0 ? `+${text}` : text;
   }
   const text = formatNumber(value);

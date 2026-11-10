@@ -877,6 +877,14 @@ main {
   color: var(--accent-2);
 }
 
+.tt-section-title {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--accent-2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 5px;
+}
+
 .tt-tier-table {
   margin-top: 6px;
   border-collapse: collapse;

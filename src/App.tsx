@@ -220,7 +220,8 @@ export default function App() {
         wand: normalizeWand({ ...presetWand, name: finalName }),
       };
       setCustomPresets((presets) => [preset, ...presets.filter((item) => item.name !== finalName)]);
-      setWand(preset.wand);
+      // the saved name belongs to the preset; start a fresh unnamed wand afterwards
+      setWand(normalizeWand({ ...preset.wand, name: '' }));
     },
     [lang],
   );

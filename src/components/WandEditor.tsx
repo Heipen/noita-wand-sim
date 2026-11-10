@@ -320,7 +320,7 @@ export function WandEditor({
             className="secondary small"
             onClick={() => {
               setSelectedPreset('');
-              onChange(clearSpells(wand));
+              onChange({ ...clearSpells(wand), name: '' });
             }}
           >
             {t(lang, 'editor.clear')}

@@ -265,6 +265,9 @@ const summaryChips = await evaluate(
 if (!summaryChips.some((text) => text.includes('伤害'))) {
   throw new Error('summary projectile card should include shot-state values: ' + JSON.stringify(summaryChips));
 }
+if (!summaryChips.some((text) => text.includes('投射物伤害 +10'))) {
+  throw new Error('Damage Plus should display +10, not the raw internal 0.4: ' + JSON.stringify(summaryChips));
+}
 if ((await evaluate("document.querySelector('.state-list')?.innerText || ''")) !== '') {
   throw new Error('the separate shot-state panel should be gone');
 }
@@ -428,7 +431,10 @@ const setNumberInput = `(index, value) => {
   setter.call(input, String(value));
   input.dispatchEvent(new Event('input', { bubbles: true }));
   // let React commit the draft before blurring; NumberField clamps its draft on blur
-  setTimeout(() => input.blur(), 30);
+  setTimeout(() => {
+    input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    input.blur();
+  }, 30);
 }`;
 await evaluate(`(${setNumberInput})(1, 26); true`);
 await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 26", 10000, 'capacity 26 slots');
@@ -495,6 +501,7 @@ const statsAfter = await evaluate(`(() => {
 if (JSON.stringify(statsBefore) !== JSON.stringify(statsAfter)) throw new Error('clearing must keep wand stats: ' + JSON.stringify({ statsBefore, statsAfter }));
 if ((await evaluate("document.querySelectorAll('.wand-slots .wand-slot.filled').length")) !== 0) throw new Error('clearing should empty the wand slots');
 if (statsAfter[1] !== '40') throw new Error('capacity should stay 40 after clearing');
+if ((await evaluate("document.querySelector('.wand-name').value")) !== '') throw new Error('clearing should also clear the wand name');
 
 await evaluate(`(() => {
   const input = document.querySelector('.wand-name');
@@ -508,6 +515,7 @@ const saveIndex = await evaluate(
 );
 await evaluate(`document.querySelectorAll('.wand-toolbar button')[${saveIndex}].click(); true`);
 await sleep(400);
+if ((await evaluate("document.querySelector('.wand-name').value")) !== '') throw new Error('saving a preset should clear the wand name');
 const presetOptions = await evaluate("[...document.querySelectorAll('.preset-select option')].map((o) => o.textContent)");
 if (!presetOptions.some((text) => text.includes('测试预设'))) throw new Error('saved preset missing: ' + JSON.stringify(presetOptions));
 await send('Page.reload');
@@ -528,8 +536,9 @@ await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spe
 await sleep(300);
 const box = await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="COLOUR_RAINBOW"]'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
+await waitFor("document.querySelector('.spell-tooltip')?.innerText.includes('修正效果')", 10000, 'tooltip effects');
 const tooltip = await waitFor("document.querySelector('.spell-tooltip')?.innerText || ''", 10000, 'tooltip');
-const expected = ['彩虹闪光', '投射修正', '法力消耗', '0', '施放延迟', '-0.13', '找到实验性魔杖', '法术等级', '对应等级生成权重'];
+const expected = ['彩虹闪光', '投射修正', '法力消耗', '0', '施放延迟', '-0.13', '找到实验性魔杖', '法术等级', '对应等级生成权重', '修正效果'];
 for (const needle of expected) {
   if (!tooltip.includes(needle)) throw new Error(`tooltip missing "${needle}": ${tooltip.replace(/\n/g, ' | ')}`);
 }
