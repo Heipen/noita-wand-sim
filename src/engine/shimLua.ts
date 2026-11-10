@@ -72,8 +72,8 @@ function __pile_snapshot()
 end
 
 local __pile_event_names = {
+  callAction = true,
   drawCard = true,
-  callActionEnd = true,
   discardEnd = true,
 }
 

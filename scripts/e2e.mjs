@@ -327,6 +327,14 @@ console.log('✓ tree step click shows per-step piles and resets');
 // end-of-cast hand flush: discard step must show the card already in discard and hand empty
 await loadWand(['BURST_3', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET'], { capacity: 4 });
 await waitFor("!!document.querySelector('.tree-discard[data-event-index]')", 60000, 'discard step');
+// parent Burst step is the state just after drawing Burst; nested bullet steps must continue forward
+await evaluate("document.querySelectorAll('.tree-action[data-event-index] > .tree-line')[0].click(); true");
+await waitFor("!!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'selected burst step');
+const burstFirstCounts = await evaluate("[...document.querySelectorAll('.piles-grid > .pile .pile-count')].map((el) => Number(el.innerText))");
+await evaluate("document.querySelectorAll('.tree-action[data-event-index] > .tree-line')[1].click(); true");
+await sleep(200);
+const burstSecondCounts = await evaluate("[...document.querySelectorAll('.piles-grid > .pile .pile-count')].map((el) => Number(el.innerText))");
+if (!(burstSecondCounts[1] > burstFirstCounts[1])) throw new Error('nested steps must not go backwards in hand size: ' + JSON.stringify({ burstFirstCounts, burstSecondCounts }));
 await evaluate("document.querySelector('.tree-discard[data-event-index] > .tree-line').click(); true");
 await waitFor("!!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'selected discard step');
 const discardPileCounts = await evaluate("[...document.querySelectorAll('.piles-grid > .pile .pile-count')].map((el) => Number(el.innerText))");

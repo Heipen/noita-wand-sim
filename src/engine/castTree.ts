@@ -22,7 +22,6 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
   // A card's action runs *inside* draw_action, while the drawCard event is emitted when
   // draw_action returns. Keep the played action around and move it under its drawCard node.
   const unattachedActions: { action: CastTreeNode; parent: CastTreeNode }[] = [];
-  const actionStack: Extract<CastTreeNode, { kind: 'action' }>[] = [];
   let pendingDiscards: Extract<CastTreeNode, { kind: 'discard' }>[] = [];
 
   const top = (): CastTreeNode => stack[stack.length - 1];
@@ -70,7 +69,7 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
           deckAfter: event.deckAfter,
           manaBefore: event.manaBefore,
           manaAfter: event.manaAfter,
-          eventIndex,
+          eventIndex: drawnAction?.kind === 'action' ? drawnAction.eventIndex : eventIndex,
           children: drawnAction ? [drawnAction] : [],
         };
         block.children.push(node);
@@ -95,17 +94,15 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
           delta: event.delta,
           lifetimeAdd: event.lifetimeAdd,
           projectiles: [],
+          eventIndex,
           children: [],
         };
         parent.children.push(node);
         stack.push(node);
-        actionStack.push(node);
         if (fromPlay) unattachedActions.push({ action: node, parent });
         break;
       }
       case 'callActionEnd': {
-        const finished = actionStack.pop();
-        if (finished) finished.eventIndex = eventIndex;
         while (stack.length > 1) {
           const popped = stack.pop();
           if (popped?.kind === 'action') break;
