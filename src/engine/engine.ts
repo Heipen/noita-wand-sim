@@ -317,6 +317,7 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
         `__setup_entities(${toLuaLiteral({
           extraWands: options.extraWands ?? [],
           req: options.requirements ?? {},
+          player: options.player ?? {},
           x: 0,
           y: 0,
         })})`,

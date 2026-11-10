@@ -147,6 +147,8 @@ function __setup_entities(cfg)
   __comps = {}
   __next_comp = 1000
   __req = cfg.req or {}
+  __player_hp = (cfg.player and cfg.player.hp) or 100
+  __player_money = (cfg.player and cfg.player.money) or 0
   __caster_x = cfg.x or 0
   __caster_y = cfg.y or 0
 
@@ -195,8 +197,14 @@ end
 function EntityGetTransform(id) return __caster_x, __caster_y end
 function EntityGetFirstComponent(id, kind)
   if kind == 'DamageModelComponent' and id == 1 then
-    __comps[990] = { hp = (__req.hp and 25 or 100), max_hp = 100 }
+    local hp_value = __player_hp
+    if __req.hp then hp_value = math.min(hp_value, 25) end
+    __comps[990] = { hp = hp_value, max_hp = __player_hp }
     return 990
+  end
+  if kind == 'WalletComponent' and id == 1 then
+    __comps[989] = { money = __player_money, money_spent = 0 }
+    return 989
   end
   local e = __entities[id]
   if e then return e.comps[kind] end

@@ -181,6 +181,8 @@ export interface SimulateOptions {
   extraWands?: ExtraWand[];
   /** World conditions for toggled spells (IF_ENEMY / IF_HP / ...). */
   requirements?: RequirementOptions;
+  /** Current caster resources used by Gold/Blood to Power and Blood Magic. */
+  player?: { hp?: number; money?: number };
   /** Stop after the wand reloads (like the old simulator's "cast until reload"). */
   untilReload?: boolean;
   /** Safety limit for untilReload mode. */

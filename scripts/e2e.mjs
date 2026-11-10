@@ -427,7 +427,8 @@ const setNumberInput = `(index, value) => {
   input.focus();
   setter.call(input, String(value));
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  input.blur();
+  // let React commit the draft before blurring; NumberField clamps its draft on blur
+  setTimeout(() => input.blur(), 30);
 }`;
 await evaluate(`(${setNumberInput})(1, 26); true`);
 await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 26", 10000, 'capacity 26 slots');
