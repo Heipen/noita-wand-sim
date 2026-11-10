@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PRESETS } from '../data/presets';
 import { formatFramesAsSeconds } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
@@ -55,20 +55,47 @@ function NumberField({
   suffix?: string;
   onChange: (value: number) => void;
 }) {
+  const [draft, setDraft] = useState(() => String(value));
+  const focused = useRef(false);
+
+  useEffect(() => {
+    // only sync from the wand while the user is not editing; otherwise an empty or
+    // half-typed value would be overwritten immediately
+    if (!focused.current) setDraft(String(value));
+  }, [value]);
+
+  const commit = () => {
+    const parsed = Number(draft);
+    if (draft.trim() === '' || !Number.isFinite(parsed)) {
+      setDraft(String(value));
+      return;
+    }
+    const clamped = Math.min(max, Math.max(min, parsed));
+    setDraft(String(clamped));
+    if (clamped !== value) onChange(clamped);
+  };
+
   return (
     <label className="field">
       <span className="field-label">{label}</span>
       <span className="field-input">
         <input
           type="number"
-          value={value}
+          value={draft}
           min={min}
           max={max}
           step={step}
-          onChange={(event) => {
-            const next = Number(event.target.value);
-            if (Number.isFinite(next)) onChange(next);
+          onFocus={() => {
+            focused.current = true;
           }}
+          onBlur={() => {
+            focused.current = false;
+            commit();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.currentTarget.blur();
+          }}
+          onChange={(event) => setDraft(event.target.value)}
         />
         {suffix && <span className="field-suffix">{suffix}</span>}
       </span>

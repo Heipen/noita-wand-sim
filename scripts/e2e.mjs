@@ -283,8 +283,10 @@ console.log('✓ compact picker, sticky spell bar, icon piles, summary zones');
 const setNumberInput = `(index, value) => {
   const input = document.querySelectorAll('.wand-stats input[type=number]')[index];
   const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  input.focus();
   setter.call(input, String(value));
   input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.blur();
 }`;
 await evaluate(`(${setNumberInput})(1, 26); true`);
 await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 26", 10000, 'capacity 26 slots');
@@ -295,6 +297,20 @@ const slotRows = await evaluate(`(() => {
 if (slotRows !== 1) throw new Error('26 wand slots should fit in one row, got rows: ' + slotRows);
 await evaluate(`(${setNumberInput})(1, 40); true`);
 await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 40", 10000, 'capacity 40 slots');
+// numeric inputs must allow being fully cleared while editing, then restore/clamp on blur
+const clearedDraft = await evaluate(`(() => {
+  const input = document.querySelectorAll('.wand-stats input[type=number]')[1];
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  input.focus();
+  setter.call(input, '');
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return input.value;
+})()`);
+if (clearedDraft !== '') throw new Error('number input should allow an empty draft while focused');
+await evaluate("document.querySelectorAll('.wand-stats input[type=number]')[1].blur(); true");
+await sleep(200);
+const restoredDraft = await evaluate("document.querySelectorAll('.wand-stats input[type=number]')[1].value");
+if (restoredDraft !== '40') throw new Error('empty draft should be restored/clamped on blur, got: ' + restoredDraft);
 const statsBefore = await evaluate(`(() => {
   const inputs = [...document.querySelectorAll('.wand-stats input[type=number]')];
   return inputs.map((input) => input.value);
