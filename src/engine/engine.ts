@@ -70,6 +70,8 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
           deckBefore: Number(entry[2]),
           deckAfter: Number(entry[3]),
           ok: entry[4] === undefined ? null : entry[4] === true,
+          manaBefore: entry[5] === undefined ? undefined : Number(entry[5]),
+          manaAfter: entry[6] === undefined ? undefined : Number(entry[6]),
         });
         break;
       case 'playAction':

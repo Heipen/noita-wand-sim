@@ -331,6 +331,7 @@ function __install_hooks()
   function draw_action(instant_reload_if_empty)
     local before = #deck
     local before_hand = #hand
+    local mana_before = mana
     local top = nil
     if deck[1] then top = deck[1].id end
     __inside_draw_action = true
@@ -345,7 +346,8 @@ function __install_hooks()
         drawn = card.id
       end
     end
-    __ev('drawCard', drawn, before, #deck, ok)
+    -- mana before/after lets the UI explain why a draw stopped (not enough mana)
+    __ev('drawCard', drawn, before, #deck, ok, mana_before, mana)
     __ev('draw', before, #deck, state_cards_drawn, ok)
     return ok
   end

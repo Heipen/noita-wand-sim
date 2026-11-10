@@ -4,7 +4,6 @@ import type { GameData, Lang, SpellType } from '../lib/types';
 import spellAliases from '../data/spellAliases.json';
 import { Toolbar } from './Toolbar';
 import { SpellCard, type HoverHandlers } from './SpellCard';
-import type { SpellTarget } from './WandEditor';
 
 const ALIASES = spellAliases as Record<string, string[]>;
 
@@ -13,18 +12,9 @@ interface Props {
   lang: Lang;
   hover: HoverHandlers;
   onAdd: (spellId: string) => void;
-  targetSlot?: SpellTarget | null;
-  onCancelTarget?: () => void;
 }
 
-export function SpellPicker({
-  data,
-  lang,
-  hover,
-  onAdd,
-  targetSlot = null,
-  onCancelTarget,
-}: Props) {
+export function SpellPicker({ data, lang, hover, onAdd }: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<SpellType | 'all'>('all');
 
@@ -64,20 +54,6 @@ export function SpellPicker({
         onQueryChange={setQuery}
         onTypeChange={setTypeFilter}
       />
-      {targetSlot !== null && (
-        <div className="picker-target-hint">
-          <span>
-            {t(
-              lang,
-              targetSlot.kind === 'always' ? 'picker.alwaysTarget' : 'picker.wandTarget',
-              { n: targetSlot.index + 1 },
-            )}
-          </span>
-          <button type="button" className="secondary" onClick={onCancelTarget}>
-            {t(lang, 'picker.cancelTarget')}
-          </button>
-        </div>
-      )}
       <div className="picker-grid">
         {filtered.map((spell) => (
           <SpellCard

@@ -189,9 +189,6 @@ await send('Emulation.setUserAgentOverride', { userAgent: mobileUA, platform: 'A
 await send('Page.reload');
 await sleep(700);
 await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'mobile UA reload');
-if ((await evaluate("document.querySelectorAll('.always-cast-tap-hint').length")) !== 1) {
-  throw new Error('mobile should show exactly one tap hint');
-}
 // ordinary wand slot: tap -> search visible -> choose spell
 await evaluate("document.querySelector('.wand-slot[data-slot=\"2\"]').click(); true");
 await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].targeted')", 10000, 'wand slot targeting');
@@ -208,20 +205,12 @@ const mobileSearch = await evaluate(`(() => {
   const input = document.querySelector('.toolbar .search');
   const sticky = document.querySelector('.wand-sticky').getBoundingClientRect();
   const rect = input.getBoundingClientRect();
-  const hint = document.querySelector('.picker-target-hint').getBoundingClientRect();
-  return { focused: document.activeElement === input, top: rect.top, stickyBottom: sticky.bottom, hintTop: hint.top, hintBottom: hint.bottom, viewport: window.innerHeight, hints: document.querySelectorAll('.picker-target-hint').length };
+  return { focused: document.activeElement === input, top: rect.top, stickyBottom: sticky.bottom };
 })()`);
 if (mobileSearch.focused) throw new Error('search field must not be focused (mobile keyboard): ' + JSON.stringify(mobileSearch));
 if (mobileSearch.top < mobileSearch.stickyBottom - 1) throw new Error('search field should be scrolled below the sticky wand: ' + JSON.stringify(mobileSearch));
-if (mobileSearch.hintTop < 0 || mobileSearch.hintBottom > mobileSearch.viewport) {
-  throw new Error('target reminder/cancel must be visible on mobile: ' + JSON.stringify(mobileSearch));
-}
-if (mobileSearch.hints !== 1) throw new Error('only one target hint should be visible: ' + JSON.stringify(mobileSearch));
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.click(); return true; })()`);
 await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].filled')", 10000, 'wand slot target filled');
-if ((await evaluate("document.querySelectorAll('.picker-target-hint').length")) !== 0) {
-  throw new Error('target hint should disappear after choosing a spell');
-}
 // Always Cast slot: same tap flow, and the four slots stay on one row
 await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
 await waitFor("!!document.querySelector('.always-slot.targeted')", 10000, 'always cast targeting');
@@ -231,6 +220,18 @@ const alwaysRows = await evaluate(
   "[...document.querySelectorAll('.always-slot')].map((el) => Math.round(el.getBoundingClientRect().top))",
 );
 if (new Set(alwaysRows).size !== 1) throw new Error('always cast slots must stay on one row: ' + JSON.stringify(alwaysRows));
+// tapping elsewhere cancels targeting, with no reminder banner to dismiss
+await evaluate("document.querySelector('.wand-slot[data-slot=\"2\"]').click(); true");
+await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].targeted')", 10000, 'wand slot retarget');
+await evaluate("document.querySelector('h1').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true");
+await waitFor("document.querySelectorAll('.wand-slot.targeted').length === 0", 10000, 'out-of-picker target cancelled');
+await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
+await waitFor("!!document.querySelector('.always-slot.targeted')", 10000, 'always slot retarget');
+await evaluate("document.querySelector('h1').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true");
+await waitFor("document.querySelectorAll('.always-slot.targeted').length === 0", 10000, 'out-of-picker always target cancelled');
+if ((await evaluate("document.querySelectorAll('.picker-target-hint, .always-cast-tap-hint').length")) !== 0) {
+  throw new Error('target reminder UI should be removed');
+}
 console.log('✓ mobile tap-to-target works for wand and Always Cast slots');
 await send('Emulation.setUserAgentOverride', { userAgent: desktopUA, platform: 'Win32' });
 await send('Page.reload');

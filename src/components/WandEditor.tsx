@@ -253,9 +253,6 @@ export function WandEditor({
               );
             })}
           </div>
-          {isMobile && (
-            <span className="always-cast-tap-hint">{t(lang, 'editor.alwaysCastTapHint')}</span>
-          )}
         </div>
       </section>
 

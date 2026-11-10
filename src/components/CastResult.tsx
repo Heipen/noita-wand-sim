@@ -850,6 +850,17 @@ function TreeNodeView({
             ) : (
               <span className="tree-failed">{t(lang, 'tree.drawCardEmpty')}</span>
             )}
+            {failed && node.manaBefore !== undefined && (
+              <span
+                className="tree-badge warn"
+                title={t(lang, 'tree.notEnoughManaHint', {
+                  mana: Math.round(node.manaBefore),
+                  cost: spell?.mana ?? 0,
+                })}
+              >
+                {t(lang, 'tree.notEnoughMana')}
+              </span>
+            )}
             {repeatBadge}
           </div>
           {renderEntries(group.children)}

@@ -6,7 +6,16 @@ export type EngineEvent =
   | { type: 'draw'; deckBefore: number; deckAfter: number; cardsDrawn: number; ok: boolean | null }
   | { type: 'drawBlockBegin'; count: number; instantReload: boolean }
   | { type: 'drawBlockEnd' }
-  | { type: 'drawCard'; spellId: string | null; deckBefore: number; deckAfter: number; ok: boolean | null }
+  | {
+      type: 'drawCard';
+      spellId: string | null;
+      deckBefore: number;
+      deckAfter: number;
+      ok: boolean | null;
+      /** Mana available before/after the draw attempt (used to explain failed draws). */
+      manaBefore?: number;
+      manaAfter?: number;
+    }
   | { type: 'playAction'; id: string; deckIndex: number | null }
   | {
       type: 'callAction';
@@ -55,6 +64,9 @@ export type CastTreeNode =
       ok: boolean | null;
       deckBefore: number;
       deckAfter: number;
+      /** Mana before/after the draw attempt; a failed draw usually means "not enough mana". */
+      manaBefore?: number;
+      manaAfter?: number;
       children: CastTreeNode[];
     }
   | {

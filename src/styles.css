@@ -656,42 +656,12 @@ main {
   gap: 6px;
 }
 
-.always-target-hint {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  font-size: 11px;
-  color: #ffd479;
-}
-
 .wand-slot.targeted {
   position: relative;
   z-index: 2;
   outline: 2px solid #ffd479;
   outline-offset: 1px;
   box-shadow: inset 0 0 0 2px #ffd479, 0 0 0 3px rgba(255, 212, 121, 0.25);
-}
-
-.always-cast-tap-hint {
-  flex-basis: 100%;
-  font-size: 10px;
-  color: var(--muted);
-}
-
-.picker-target-hint {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding: 8px 10px;
-  border: 1px solid #6a512a;
-  border-radius: 8px;
-  background: rgba(106, 81, 42, 0.22);
-  color: #ffd479;
-  font-size: 12px;
 }
 
 .always-slot {

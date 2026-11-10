@@ -65,6 +65,8 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
           ok: event.ok,
           deckBefore: event.deckBefore,
           deckAfter: event.deckAfter,
+          manaBefore: event.manaBefore,
+          manaAfter: event.manaAfter,
           children: drawnAction ? [drawnAction] : [],
         };
         block.children.push(node);

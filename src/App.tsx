@@ -355,6 +355,19 @@ export default function App() {
     [spellTarget],
   );
 
+  useEffect(() => {
+    if (spellTarget === null) return;
+    const cancelOutside = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      // clicking a slot switches/toggles the target; clicking the spell picker selects a spell.
+      // Anywhere else means the user moved on, so silently drop the target.
+      if (target?.closest('.wand-slot, .spell-picker')) return;
+      setSpellTarget(null);
+    };
+    window.addEventListener('pointerdown', cancelOutside, true);
+    return () => window.removeEventListener('pointerdown', cancelOutside, true);
+  }, [spellTarget]);
+
   const share = useCallback(async () => {
     const url = shareUrlForWand(wand);
     try {
@@ -442,8 +455,6 @@ export default function App() {
                 lang={lang}
                 hover={{ show: showTooltip, hide: hideTooltip }}
                 onAdd={addSpell}
-                targetSlot={spellTarget}
-                onCancelTarget={() => setSpellTarget(null)}
               />
               <CastResult
                 result={result}
