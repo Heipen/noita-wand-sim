@@ -278,6 +278,21 @@ if ((await evaluate("document.querySelectorAll('.tree-delta').length")) === 0) t
 await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
 console.log('✓ modifier summary icons + tree slot numbers + stat toggle');
 
+// count only real projectiles (the wand ghost's image emitter is a visual effect), and show
+// drawing utility spells among a projectile's modifiers
+await loadWand(['SUMMON_WANDGHOST']);
+const summonSummary = await waitFor("document.querySelector('.spell-summary')?.innerText || ''", 60000, 'summon wand summary');
+if (!summonSummary.includes('共 1 个投射物')) throw new Error('summon wand should count 1 projectile: ' + summonSummary);
+const summonTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
+if (!summonTree.includes('共 1 发')) throw new Error('summon wand tree total should be 1: ' + summonTree);
+await loadWand(['CASTER_CAST', 'LIGHT_BULLET']);
+await waitFor(
+  "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('随心法术'))",
+  60000,
+  'utility spell shown as modifier',
+);
+console.log('✓ visual effects excluded; drawing utility spells listed as modifiers');
+
 // 4) divide-by-10 chain => 800 projectiles
 await loadWand(['DIVIDE_10', 'DIVIDE_10', 'DIVIDE_4', 'DIVIDE_2', 'LIGHT_BULLET'], {
   capacity: 5,

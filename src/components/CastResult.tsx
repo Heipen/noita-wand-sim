@@ -45,13 +45,22 @@ function entityLabel(entity: string): string {
   return entity.split('/').pop() ?? entity;
 }
 
+/** Visual-only entities (particles/image emitters) are not actual projectiles. */
+function isVisualEffectEntity(entity: string): boolean {
+  return /\/(?:particles|image_emitters)\//i.test(entity);
+}
+
+function visibleProjectiles(projectiles: string[]): string[] {
+  return projectiles.filter((entity) => !isVisualEffectEntity(entity));
+}
+
 /** Spells that copy/duplicate other spells from the deck. */
 function isDuplicator(id: string): boolean {
   return /^DIVIDE_\d+$/.test(id) || id === 'TAU' || id === 'OMEGA';
 }
 
 function copiesNothing(node: Extract<CastTreeNode, { kind: 'action' }>): boolean {
-  return isDuplicator(node.id) && node.children.length === 0 && node.projectiles.length === 0;
+  return isDuplicator(node.id) && node.children.length === 0 && visibleProjectiles(node.projectiles).length === 0;
 }
 
 function SpellIcon({ spell, data, size }: { spell?: SpellMeta; data: GameData; size?: 'big' }) {
@@ -166,7 +175,7 @@ function nodeSignature(node: CastTreeNode): string {
     case 'action':
       // fold repeated casts of the same spell only when their nested branches match;
       // Divide By copies with different payloads must stay separate
-      return `action(${node.id})[${childSignature(node.children)}]${node.projectiles.join(',')}`;
+      return `action(${node.id})[${childSignature(node.children)}]${visibleProjectiles(node.projectiles).join(',')}`;
     case 'trigger':
       // keep the payload shape in the signature: two triggers on the same projectile but
       // with different payloads must not fold into one
@@ -265,7 +274,7 @@ function groupTree(tree: CastTreeNode, foldRepeats: boolean): GroupedNode {
 }
 
 function projectileCountOfNode(group: GroupedNode): number {
-  let count = group.node.kind === 'action' ? group.node.projectiles.length : 0;
+  let count = group.node.kind === 'action' ? visibleProjectiles(group.node.projectiles).length : 0;
   for (const child of group.children) count += projectileCountOfEntry(child);
   return count;
 }
@@ -325,7 +334,12 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
     switch (node.kind) {
       case 'action': {
         const spell = maps.byId.get(node.id);
-        if (spell?.type === 'modifier') {
+        // utility spells that draw the next spell (Blood Magic, Gold to Power, Caster Cast...)
+        // apply their shot-state changes to that projectile just like modifiers
+        const castsIntoNext =
+          spell?.type === 'modifier' ||
+          (spell?.type === 'utility' && node.children.some((child) => child.kind === 'drawBlock'));
+        if (castsIntoNext) {
           modifierCounts.set(node.id, (modifierCounts.get(node.id) ?? 0) + 1);
         }
         // multiple related projectiles (e.g. BUCKSHOT) can each carry their own trigger;
@@ -334,7 +348,7 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
           (child): child is Extract<CastTreeNode, { kind: 'trigger' }> => child.kind === 'trigger',
         );
         const usedTriggers = new Set<number>();
-        for (const entity of node.projectiles) {
+        for (const entity of visibleProjectiles(node.projectiles)) {
           const triggerIndex = triggerNodes.findIndex(
             (trigger, index) => !usedTriggers.has(index) && trigger.projectile === entity,
           );
@@ -809,10 +823,10 @@ function TreeNodeView({
                 <span className="tree-badge">{t(lang, 'tree.iteration', { n: actionNode.iteration })}</span>
               )}
               {copiesNothing(actionNode) && <span className="tree-badge warn">{t(lang, 'tree.noCopies')}</span>}
-              {actionNode.projectiles.length > 0 && (
+              {visibleProjectiles(actionNode.projectiles).length > 0 && (
                 <span className="tree-projectile-inline">
                   →{' '}
-                  {actionNode.projectiles.map((entity, index) => {
+                  {visibleProjectiles(actionNode.projectiles).map((entity, index) => {
                     const projectileSpell = maps.byEntity.get(entity);
                     const projectileName = spellName(projectileSpell, entityLabel(entity), lang);
                     return (
@@ -888,10 +902,10 @@ function TreeNodeView({
             {node.recursion !== null && <span className="tree-badge">{t(lang, 'tree.recursion', { n: node.recursion })}</span>}
             {node.iteration !== null && <span className="tree-badge">{t(lang, 'tree.iteration', { n: node.iteration })}</span>}
             {copiesNothing(node) && <span className="tree-badge warn">{t(lang, 'tree.noCopies')}</span>}
-            {node.projectiles.length > 0 && (
+            {visibleProjectiles(node.projectiles).length > 0 && (
               <span className="tree-projectile-inline">
                 →{' '}
-                {node.projectiles.map((entity, index) => {
+                {visibleProjectiles(node.projectiles).map((entity, index) => {
                   const projectileSpell = maps.byEntity.get(entity);
                   const name = spellName(projectileSpell, entityLabel(entity), lang);
                   return (
@@ -1306,7 +1320,7 @@ function buildStory(
             depth,
             tone: 'action',
             text: `${t(lang, 'tree.storyDrawAndAction', { name: actionName })}${actionAnnotations(actionNode)}${projectileText(
-              actionNode.projectiles,
+              visibleProjectiles(actionNode.projectiles),
             )}${copiesNothing(actionNode) ? t(lang, 'tree.storyNoCopies') : ''}`,
             spell: actionSpell,
             deltas: showDeltas ? formatDeltas(actionNode.delta, lang) : [],
@@ -1335,7 +1349,7 @@ function buildStory(
         const direct = node.deckIndex === null && !node.permanent;
         const text = `${direct ? t(lang, 'tree.storyCall', { name }) : t(lang, 'tree.storyAction', { name })}${actionAnnotations(
           node,
-        )}${projectileText(node.projectiles)}${copiesNothing(node) ? t(lang, 'tree.storyNoCopies') : ''}`;
+        )}${projectileText(visibleProjectiles(node.projectiles))}${copiesNothing(node) ? t(lang, 'tree.storyNoCopies') : ''}`;
         steps.push({
           depth,
           tone: direct ? 'call' : 'action',
@@ -1460,7 +1474,7 @@ function collectStats(tree: CastTreeNode) {
   const walk = (node: CastTreeNode) => {
     if (node.kind === 'action') {
       actions += 1;
-      projectiles += node.projectiles.length;
+      projectiles += visibleProjectiles(node.projectiles).length;
     }
     node.children.forEach(walk);
   };
