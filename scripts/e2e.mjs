@@ -281,6 +281,21 @@ if ((await evaluate("document.querySelectorAll('.tree-delta').length")) === 0) t
 await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
 console.log('✓ modifier summary icons + tree slot numbers + stat toggle');
 
+// clicking a tree step should show that step's deck/hand/discard state
+await loadWand(['LIGHT_BULLET', 'LIGHT_BULLET', 'BOMB'], { capacity: 3 });
+await waitFor("document.querySelectorAll('.tree-node[data-event-index]').length > 0", 60000, 'clickable tree steps');
+const pilesBefore = await evaluate("document.querySelector('.piles-grid')?.innerText || ''");
+await evaluate("document.querySelector('.tree-node[data-event-index] > .tree-line').click(); true");
+await waitFor("!!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'selected tree step');
+const pilesAfter = await evaluate("document.querySelector('.piles-grid')?.innerText || ''");
+if (!pilesAfter || pilesAfter === pilesBefore) throw new Error('selecting a tree step should change the displayed piles');
+if (!(await evaluate("document.body.innerText.includes('回到施法结束')"))) throw new Error('selected pile state should offer a reset action');
+await evaluate("document.querySelector('.piles-reset')?.click(); true");
+await waitFor("!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'pile selection reset');
+const pilesReset = await evaluate("document.querySelector('.piles-grid')?.innerText || ''");
+if (pilesReset !== pilesBefore) throw new Error('reset should restore the end-of-cast piles');
+console.log('✓ tree step click shows per-step piles and resets');
+
 // count only real projectiles (the wand ghost's image emitter is a visual effect), and show
 // drawing utility spells among a projectile's modifiers
 await loadWand(['SUMMON_WANDGHOST']);

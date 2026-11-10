@@ -57,10 +57,31 @@ __not_enough = false
 __if_half = 0
 __frame = 0
 
+function __pile_ids(list)
+  local out = {}
+  for i = 1, #list do out[i] = list[i].id end
+  return out
+end
+
+function __pile_snapshot()
+  return {
+    deck = __pile_ids(deck),
+    hand = __pile_ids(hand),
+    discarded = __pile_ids(discarded),
+  }
+end
+
+local __pile_event_names = {
+  drawCard = true,
+  callActionEnd = true,
+  discard = true,
+}
+
 function __ev(name, ...)
   local n = select('#', ...)
   local t = { name = name }
   for i = 1, n do t[i] = select(i, ...) end
+  if __pile_event_names[name] then t.piles = __pile_snapshot() end
   __events[#__events + 1] = t
 end
 

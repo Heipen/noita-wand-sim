@@ -54,6 +54,16 @@ export interface ActionCallNode {
   lifetimeAdd?: number;
 }
 
+export interface PileState {
+  deck: string[];
+  hand: string[];
+  discarded: string[];
+}
+
+export interface PileStep extends PileState {
+  eventIndex: number;
+}
+
 /** Evaluation tree node: the wand draw → card draw → action call hierarchy. */
 export type CastTreeNode =
   | { kind: 'cast'; children: CastTreeNode[] }
@@ -67,6 +77,8 @@ export type CastTreeNode =
       /** Mana before/after the draw attempt; a failed draw usually means "not enough mana". */
       manaBefore?: number;
       manaAfter?: number;
+      /** Index into the flat event log for the pile snapshot after this draw. */
+      eventIndex?: number;
       children: CastTreeNode[];
     }
   | {
@@ -80,6 +92,8 @@ export type CastTreeNode =
       delta?: Record<string, number>;
       lifetimeAdd?: number;
       projectiles: string[];
+      /** Index into the flat event log for the pile snapshot after this action. */
+      eventIndex?: number;
       children: CastTreeNode[];
     }
   | {
@@ -88,7 +102,7 @@ export type CastTreeNode =
       projectile: string | null;
       children: CastTreeNode[];
     }
-  | { kind: 'discard'; spellId: string; sourceAction: string | null; children: CastTreeNode[] };
+  | { kind: 'discard'; spellId: string; sourceAction: string | null; eventIndex?: number; children: CastTreeNode[] };
 
 export interface ProjectileNode {
   entity: string;
@@ -126,6 +140,8 @@ export interface ShotResult {
   deck: string[];
   hand: string[];
   discarded: string[];
+  /** Pile snapshots captured during the shot, ordered by event index. */
+  pileSteps: PileStep[];
 }
 
 export interface SimulationResult {

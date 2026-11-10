@@ -5,6 +5,7 @@ import { ENGINE_STUBS, LUA_HOOKS, LUA_PRELUDE, LUA_PREPARE, toLuaLiteral } from 
 import { loadEngineScripts } from './sources';
 import type {
   EngineEvent,
+  PileStep,
   ScriptSource,
   ShotResult,
   SimulateOptions,
@@ -169,6 +170,25 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
   return events;
 }
 
+/** Extract the pile snapshots attached to draw/action/discard events. */
+function parsePileSteps(raw: Record<string, unknown>[]): PileStep[] {
+  const steps: PileStep[] = [];
+  raw.forEach((entry, eventIndex) => {
+    const piles = entry.piles;
+    if (!piles || typeof piles !== 'object') return;
+    const record = piles as Record<string, unknown>;
+    const strings = (value: unknown): string[] =>
+      Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+    steps.push({
+      eventIndex,
+      deck: strings(record.deck),
+      hand: strings(record.hand),
+      discarded: strings(record.discarded),
+    });
+  });
+  return steps;
+}
+
 export async function createWandEngine(source: ScriptSource): Promise<WandEngine> {
   const scripts = await loadEngineScripts(source);
   if (!scripts.has('data/scripts/gun/gun.lua')) {
@@ -279,6 +299,7 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
     const json = evalString(`return __do_shot(${mana}, ${frame}, ${castDelayFrames})`, 'do_shot');
     const snapshot = JSON.parse(json) as Snapshot;
     const events = parseEvents(snapshot.events);
+    const pileSteps = parsePileSteps(snapshot.events);
     // StartReload can be called more than once in a shot (e.g. CESSATION copied by
     // DIVIDE_2); the last call is the one that determines the actual recharge time.
     const reloadEvent = [...events].reverse().find((event) => event.type === 'reload');
@@ -299,6 +320,7 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
       deck: snapshot.deck,
       hand: snapshot.hand,
       discarded: snapshot.discarded,
+      pileSteps,
     };
     return { shot, snapshot };
   };

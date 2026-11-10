@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { CastTreeNode, EngineEvent, ShotResult, SimulationResult } from '../engine/types';
 import { DAMAGE_DISPLAY_SCALE, formatFramesAsSeconds, formatNumber } from '../lib/format';
@@ -17,6 +17,11 @@ interface Props {
   /** Wand slots (0-based) used to label each spell with its wand number. */
   wandSpells: (string | null)[];
 }
+
+const TreeSelectionContext = createContext<{
+  selectedEvent: number | null;
+  onSelect: (eventIndex: number) => void;
+} | null>(null);
 
 interface SpellMaps {
   byId: Map<string, SpellMeta>;
@@ -800,6 +805,14 @@ function TreeNodeView({
   level?: number;
 }) {
   const node = group.node;
+  const selection = useContext(TreeSelectionContext);
+  const eventAttrs = (eventIndex: number | undefined) =>
+    eventIndex === undefined
+      ? {}
+      : {
+          'data-event-index': eventIndex,
+          'data-selected': selection?.selectedEvent === eventIndex ? 'true' : 'false',
+        };
   const renderEntries = (entries: GroupedEntry[], dontDrawContext?: boolean, parentK?: CastTreeNode['kind']) =>
     entries.map((entry, index) => (
       <TreeEntryView
@@ -866,7 +879,7 @@ function TreeNodeView({
         const deltas = showDeltas ? formatDeltas(actionNode.delta, lang) : [];
         const slot = actionNode.deckIndex !== null ? actionNode.deckIndex + 1 : slotMap.get(actionNode.id);
         return (
-          <div className="tree-node tree-action">
+          <div className="tree-node tree-action" {...eventAttrs(actionNode.eventIndex)}>
             <div className="tree-line">
               <SpellIcon spell={actionSpell} data={data} />
               <span className="tree-action-name">{t(lang, 'tree.drawAndAction', { name: actionName })}</span>
@@ -913,7 +926,7 @@ function TreeNodeView({
         );
       }
       return (
-        <div className="tree-node tree-drawcard">
+        <div className="tree-node tree-drawcard" {...eventAttrs(node.eventIndex)}>
           <div className="tree-line">
             <SpellIcon spell={spell} data={data} />
             {node.spellId ? (
@@ -947,7 +960,7 @@ function TreeNodeView({
       const directCall = node.deckIndex === null && !node.permanent;
       const slot = node.deckIndex !== null ? node.deckIndex + 1 : !node.permanent ? slotMap.get(node.id) : undefined;
       return (
-        <div className="tree-node tree-action">
+        <div className="tree-node tree-action" {...eventAttrs(node.eventIndex)}>
           <div className="tree-line">
             <SpellIcon spell={spell} data={data} />
             <span className="tree-action-name">
@@ -1012,7 +1025,7 @@ function TreeNodeView({
     case 'discard': {
       const spell = maps.byId.get(node.spellId);
       return (
-        <div className="tree-node tree-discard">
+        <div className="tree-node tree-discard" {...eventAttrs(node.eventIndex)}>
           <div className="tree-line">
             <SpellIcon spell={spell} data={data} />
             <span className="tree-failed">{t(lang, 'tree.discard', { name: spellName(spell, node.spellId, lang) })}</span>
@@ -1063,7 +1076,10 @@ function TreeEntryView({
         <button
           type="button"
           className="tree-sequence-head"
-          onClick={() => onToggle(entry.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle(entry.id);
+          }}
           title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
           style={{ color }}
         >
@@ -1112,7 +1128,10 @@ function TreeEntryView({
         <button
           type="button"
           className="tree-sequence-head tree-repeat"
-          onClick={() => onToggle(entry.id)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle(entry.id);
+          }}
           title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
           style={{ color }}
         >
@@ -1571,8 +1590,10 @@ function ShotCard({
   const [treeOpen, setTreeOpen] = useState(true);
   const [stepsOpen, setStepsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
   useEffect(() => {
     setExpanded(new Set());
+    setSelectedEvent(null);
   }, [shot, foldRepeats]);
   const toggleGroup = useCallback((id: string) => {
     setExpanded((previous) => {
@@ -1582,6 +1603,32 @@ function ShotCard({
       return next;
     });
   }, []);
+  const handleTreeClick = useCallback((event: { target: EventTarget | null }) => {
+    if (!(event.target instanceof Element)) return;
+    const step = event.target.closest('[data-event-index]');
+    if (!step) return;
+    const eventIndex = Number(step.getAttribute('data-event-index'));
+    if (!Number.isFinite(eventIndex)) return;
+    setSelectedEvent((previous) => (previous === eventIndex ? null : eventIndex));
+  }, []);
+  const treeSelection = useMemo(
+    () => ({
+      selectedEvent,
+      onSelect: (eventIndex: number) => {
+        setSelectedEvent((previous) => (previous === eventIndex ? null : eventIndex));
+      },
+    }),
+    [selectedEvent],
+  );
+  const selectedPiles = useMemo(() => {
+    if (selectedEvent === null) return null;
+    let found = null;
+    for (const step of shot.pileSteps) {
+      if (step.eventIndex > selectedEvent) break;
+      found = step;
+    }
+    return found;
+  }, [selectedEvent, shot.pileSteps]);
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
   const grouped = useMemo(() => groupTree(shot.tree, foldRepeats), [shot.tree, foldRepeats]);
   // 施法过程暂时停用：保留全部实现，需要恢复时把 SHOW_CASTING_STEPS 改成 true。
@@ -1710,30 +1757,47 @@ function ShotCard({
             (stats.actions === 0 ? (
               <p className="muted">{t(lang, 'result.noProjectiles')}</p>
             ) : (
-              <div className="tree-root">
-                <TreeNodeView
-                  group={grouped}
-                  repeat={1}
-                  expanded={expanded}
-                  onToggle={toggleGroup}
-                  data={data}
-                  lang={lang}
-                  maps={maps}
-                  showDeltas={showDeltas}
-                  slotMap={slotMap}
-                />
+              <div className="tree-root" onClick={handleTreeClick}>
+                <TreeSelectionContext.Provider value={treeSelection}>
+                  <TreeNodeView
+                    group={grouped}
+                    repeat={1}
+                    expanded={expanded}
+                    onToggle={toggleGroup}
+                    data={data}
+                    lang={lang}
+                    maps={maps}
+                    showDeltas={showDeltas}
+                    slotMap={slotMap}
+                  />
+                </TreeSelectionContext.Provider>
               </div>
             ))}
         </section>
         <section className="piles">
           <h4>
-            {t(lang, 'result.piles')} <span className="muted small">{t(lang, 'result.pilesNote')}</span>
+            {t(lang, 'result.piles')}{' '}
+            <span className="muted small">
+              {selectedPiles ? t(lang, 'result.pilesAtStepNote') : t(lang, 'result.pilesNote')}
+            </span>
+            {selectedPiles && (
+              <button type="button" className="secondary small piles-reset" onClick={() => setSelectedEvent(null)}>
+                {t(lang, 'result.pilesBackToEnd')}
+              </button>
+            )}
           </h4>
+          <p className="pile-note muted small">{t(lang, 'result.pilesClickHint')}</p>
           <div className="piles-grid">
-            <Pile title={t(lang, 'result.pileDeck')} ids={shot.deck} data={data} lang={lang} maps={maps} />
-            <Pile title={t(lang, 'result.pileHand')} ids={shot.hand} data={data} lang={lang} maps={maps} />
-            <Pile title={t(lang, 'result.pileDiscard')} ids={shot.discarded} data={data} lang={lang} maps={maps} />
-            {castDiscards.length > 0 && (
+            <Pile title={t(lang, 'result.pileDeck')} ids={selectedPiles?.deck ?? shot.deck} data={data} lang={lang} maps={maps} />
+            <Pile title={t(lang, 'result.pileHand')} ids={selectedPiles?.hand ?? shot.hand} data={data} lang={lang} maps={maps} />
+            <Pile
+              title={t(lang, 'result.pileDiscard')}
+              ids={selectedPiles?.discarded ?? shot.discarded}
+              data={data}
+              lang={lang}
+              maps={maps}
+            />
+            {!selectedPiles && castDiscards.length > 0 && (
               <div className="cast-discards">
                 <Pile title={t(lang, 'result.castDiscards')} ids={castDiscards} data={data} lang={lang} maps={maps} />
                 <div className="pile-note muted small">{t(lang, 'result.castDiscardsNote')}</div>
