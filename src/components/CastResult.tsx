@@ -1853,15 +1853,6 @@ function ShotCard({
             <div className="cast-block-preview">
               <div className="cast-block-head">
                 <span>{t(lang, 'result.castBlock')}</span>
-                <span className="muted small">
-                  {t(lang, 'result.castBlockCount', {
-                    actions: castBlockGroups.reduce(
-                      (sum, block) => sum + block.actions.reduce((blockSum, group) => blockSum + group.count, 0),
-                      0,
-                    ),
-                    kinds: new Set(castBlockGroups.flatMap((block) => block.actions.map((group) => group.id))).size,
-                  })}
-                </span>
               </div>
               {castBlockGroups.map((block, blockIndex) => (
                 <div
