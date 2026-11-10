@@ -1329,6 +1329,27 @@ main {
   background: rgba(0, 0, 0, 0.35);
 }
 
+.tree-effect {
+  font-size: 10px;
+  border: 1px solid #4b7a53;
+  border-radius: 999px;
+  padding: 0 6px;
+  color: #bfe8c4;
+  background: rgba(20, 40, 28, 0.55);
+  white-space: nowrap;
+}
+
+.tree-effect.active {
+  color: #e6ffd6;
+  border-color: #7fbf7a;
+  background: rgba(60, 110, 60, 0.35);
+}
+
+.tree-effect sup {
+  margin-left: 3px;
+  color: #ffd479;
+}
+
 .tree-type {
   background: rgba(0, 0, 0, 0.35);
   border-radius: 999px;
@@ -1723,6 +1744,41 @@ main {
 
 .summary-total {
   margin-top: 6px;
+}
+
+.summary-effects {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px dashed #2b5a4a;
+  border-radius: 8px;
+  background: rgba(43, 90, 74, 0.08);
+}
+
+.summary-effects-label {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.summary-effect {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #bfe8c4;
+}
+
+.summary-effect-bonus {
+  color: #ffd479;
+  font-size: 11px;
+}
+
+.summary-effect-count {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .deltas-toggle {

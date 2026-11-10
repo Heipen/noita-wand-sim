@@ -306,13 +306,16 @@ function __install_hooks()
     action.action = function(recursion_level, iteration)
       local eventIndex = #__events + 1
       local before = __capture_shot_state()
+      local lifetime_add = (c and c.lifetime_add) or 0
       __ev(
         'callAction',
         action.id,
         recursion_level,
         iteration,
         dont_draw_actions == true,
-        playing_permanent_card == true
+        playing_permanent_card == true,
+        nil,
+        lifetime_add
       )
       local previous_action = __current_action_id
       __current_action_id = action.id
@@ -364,7 +367,7 @@ function __install_hooks()
     local before = __capture_shot_state()
     __ev('playAction', action.id, action.deck_index)
     local actionIndex = #__events + 1
-    __ev('action', action.id, action.deck_index)
+    __ev('action', action.id, action.deck_index, nil, (c and c.lifetime_add) or 0)
     local result = orig_play_action(action)
     __events[actionIndex][3] = __state_delta(before)
     return result

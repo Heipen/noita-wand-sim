@@ -15,11 +15,19 @@ export type EngineEvent =
       iteration: number | null;
       dontDraw: boolean;
       permanent: boolean;
+      /** Shot-state lifetime addition when this action started (e.g. CESSATION duration). */
+      lifetimeAdd?: number;
       delta?: Record<string, number>;
     }
   | { type: 'callActionEnd' }
   | { type: 'discard'; spellId: string; discardedCount: number; sourceAction: string | null }
-  | { type: 'action'; id: string; deckIndex?: number | null; delta?: Record<string, number> }
+  | {
+      type: 'action';
+      id: string;
+      deckIndex?: number | null;
+      delta?: Record<string, number>;
+      lifetimeAdd?: number;
+    }
   | { type: 'projectileBegin'; entity: string }
   | { type: 'projectileEnd' }
   | { type: 'triggerBegin'; kind: 'timer' | 'hitWorld' | 'death'; delayFrames?: number }
@@ -33,6 +41,8 @@ export interface ActionCallNode {
   deckIndex: number | null;
   /** Shot-state fields this action changed (after - before), for human-readable explanations. */
   delta?: Record<string, number>;
+  /** Accumulated `lifetime_add` when the action ran (used by CESSATION's own duration). */
+  lifetimeAdd?: number;
 }
 
 /** Evaluation tree node: the wand draw → card draw → action call hierarchy. */
@@ -56,6 +66,7 @@ export type CastTreeNode =
       dontDraw: boolean;
       permanent: boolean;
       delta?: Record<string, number>;
+      lifetimeAdd?: number;
       projectiles: string[];
       children: CastTreeNode[];
     }

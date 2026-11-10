@@ -362,6 +362,57 @@ function countSummary(items: SummaryItem[], acc = { projectiles: 0, modifiers: n
   return acc;
 }
 
+const CESSATION_BASE_LIFETIME = 20;
+
+interface CessationEffect {
+  frames: number;
+  bonus: number;
+  count: number;
+}
+
+function collectCessationEffects(tree: CastTreeNode): CessationEffect[] {
+  const effects = new Map<string, CessationEffect>();
+  const walk = (node: CastTreeNode) => {
+    if (node.kind === 'action' && node.id === 'CESSATION' && node.lifetimeAdd !== undefined) {
+      const bonus = node.lifetimeAdd;
+      const frames = CESSATION_BASE_LIFETIME + bonus;
+      const key = `${frames}|${bonus}`;
+      const existing = effects.get(key);
+      if (existing) existing.count += 1;
+      else effects.set(key, { frames, bonus, count: 1 });
+    }
+    node.children.forEach(walk);
+  };
+  walk(tree);
+  return [...effects.values()];
+}
+
+function CessationLifetimeBadge({
+  node,
+  lang,
+}: {
+  node: { id: string; lifetimeAdd?: number };
+  lang: Lang;
+}) {
+  if (node.id !== 'CESSATION' || node.lifetimeAdd === undefined) return null;
+  const bonus = node.lifetimeAdd;
+  const frames = CESSATION_BASE_LIFETIME + bonus;
+  return (
+    <span
+      className={`tree-effect${bonus !== 0 ? ' active' : ''}`}
+      title={t(lang, 'tree.cessationHint', { bonus, frames })}
+    >
+      {t(lang, 'tree.cessationLifetime', { frames, seconds: formatFramesAsSeconds(frames) })}
+      {bonus !== 0 && (
+        <sup>
+          {bonus > 0 ? '+' : ''}
+          {bonus}
+        </sup>
+      )}
+    </span>
+  );
+}
+
 function SummaryItemCard({
   item,
   data,
@@ -450,23 +501,62 @@ function SpellSummary({
   const summary = useMemo(() => {
     const items = summarizeNodes(tree.children, maps);
     const counts = countSummary(items);
-    return { items, projectileCount: counts.projectiles, modifierKinds: counts.modifiers.size };
+    return {
+      items,
+      projectileCount: counts.projectiles,
+      modifierKinds: counts.modifiers.size,
+      cessations: collectCessationEffects(tree),
+    };
   }, [tree, maps]);
   return (
     <section className="spell-summary">
       <h4>{t(lang, 'result.summary')}</h4>
-      {summary.items.length === 0 ? (
+      {summary.items.length === 0 && summary.cessations.length === 0 ? (
         <p className="muted small">{t(lang, 'summary.none')}</p>
       ) : (
         <>
-          <div className="summary-grid">
-            {summary.items.map((item, index) => (
-              <SummaryItemCard key={index} item={item} data={data} lang={lang} maps={maps} />
-            ))}
-          </div>
-          <div className="summary-total muted small">
-            {t(lang, 'summary.total', { projectiles: summary.projectileCount, modifiers: summary.modifierKinds })}
-          </div>
+          {summary.items.length > 0 && (
+            <div className="summary-grid">
+              {summary.items.map((item, index) => (
+                <SummaryItemCard key={index} item={item} data={data} lang={lang} maps={maps} />
+              ))}
+            </div>
+          )}
+          {summary.items.length > 0 && (
+            <div className="summary-total muted small">
+              {t(lang, 'summary.total', {
+                projectiles: summary.projectileCount,
+                modifiers: summary.modifierKinds,
+              })}
+            </div>
+          )}
+          {summary.cessations.length > 0 && (
+            <div className="summary-effects">
+              <span className="summary-effects-label">{t(lang, 'summary.effects')}</span>
+              {summary.cessations.map((effect, index) => (
+                <span
+                  className="summary-effect"
+                  key={index}
+                  title={t(lang, 'tree.cessationHint', { bonus: effect.bonus, frames: effect.frames })}
+                >
+                  <SpellIcon spell={maps.byId.get('CESSATION')} data={data} />
+                  <span>
+                    {t(lang, 'summary.cessation', {
+                      frames: effect.frames,
+                      seconds: formatFramesAsSeconds(effect.frames),
+                    })}
+                  </span>
+                  {effect.bonus !== 0 && (
+                    <span className="summary-effect-bonus">
+                      {effect.bonus > 0 ? '+' : ''}
+                      {effect.bonus}
+                    </span>
+                  )}
+                  {effect.count > 1 && <span className="summary-effect-count">×{effect.count}</span>}
+                </span>
+              ))}
+            </div>
+          )}
         </>
       )}
     </section>
@@ -579,6 +669,7 @@ function TreeNodeView({
               {slot !== undefined && <span className="tree-slot">#{slot}</span>}
               {actionNode.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
               {actionNode.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
+              <CessationLifetimeBadge node={actionNode} lang={lang} />
               {actionNode.recursion !== null && (
                 <span className="tree-badge">{t(lang, 'tree.recursion', { n: actionNode.recursion })}</span>
               )}
@@ -650,6 +741,7 @@ function TreeNodeView({
             {slot !== undefined && <span className="tree-slot">#{slot}</span>}
             {node.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
             {node.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
+            <CessationLifetimeBadge node={node} lang={lang} />
             {node.recursion !== null && <span className="tree-badge">{t(lang, 'tree.recursion', { n: node.recursion })}</span>}
             {node.iteration !== null && <span className="tree-badge">{t(lang, 'tree.iteration', { n: node.iteration })}</span>}
             {copiesNothing(node) && <span className="tree-badge warn">{t(lang, 'tree.noCopies')}</span>}

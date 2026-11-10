@@ -167,6 +167,18 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(payload?.actions[0].delta?.fire_rate_wait).toBe(100);
   });
 
+  it('records the lifetime bonus used by CESSATION', () => {
+    const shot = engine.simulate(wand(['LIFETIME', 'CESSATION']), { mana: 1000 }).shots[0];
+    const actions: any[] = [];
+    const walk = (node: any) => {
+      if (node.kind === 'action') actions.push(node);
+      node.children.forEach(walk);
+    };
+    walk(shot.tree);
+    const cessation = actions.find((action) => action.id === 'CESSATION');
+    expect(cessation?.lifetimeAdd).toBe(75);
+  });
+
   it('uses the last StartReload when DIVIDE_2 copies CESSATION twice', () => {
     const shot = engine.simulate(
       wand(['DIVIDE_2', 'CESSATION', 'LIGHT_BULLET'], { reload_time: 60, cast_delay: 60 }),

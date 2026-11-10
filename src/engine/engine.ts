@@ -96,6 +96,7 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
           iteration: entry[3] === undefined ? null : Number(entry[3]),
           dontDraw: entry[4] === true,
           permanent: entry[5] === true,
+          lifetimeAdd: entry[7] === undefined ? undefined : Number(entry[7]),
           delta,
         });
         break;
@@ -125,6 +126,7 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
           type: 'action',
           id: String(entry[1]),
           deckIndex: entry[2] === undefined ? null : Number(entry[2]),
+          lifetimeAdd: entry[4] === undefined ? undefined : Number(entry[4]),
           delta,
         });
         break;

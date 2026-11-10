@@ -87,6 +87,7 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
           dontDraw: event.dontDraw,
           permanent: event.permanent,
           delta: event.delta,
+          lifetimeAdd: event.lifetimeAdd,
           projectiles: [],
           children: [],
         };
@@ -161,7 +162,12 @@ export function buildCastBlock(events: EngineEvent[]): CastBlock {
     const current = stack[stack.length - 1];
     switch (event.type) {
       case 'action':
-        current.actions.push({ id: event.id, deckIndex: event.deckIndex ?? null, delta: event.delta });
+        current.actions.push({
+          id: event.id,
+          deckIndex: event.deckIndex ?? null,
+          delta: event.delta,
+          lifetimeAdd: event.lifetimeAdd,
+        });
         break;
       case 'projectileBegin': {
         const node: ProjectileNode = { entity: event.entity };
