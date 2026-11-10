@@ -549,6 +549,34 @@ main {
   margin-bottom: 6px;
 }
 
+.wand-sticky-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wand-sticky-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.wand-sticky-toggle input {
+  width: 12px;
+  height: 12px;
+  margin: 0;
+}
+
+.wand-sticky.wand-sticky-off {
+  position: static;
+}
+
 .wand-sticky-name {
   font-size: 13px;
   color: var(--text);

@@ -37,6 +37,7 @@ const LANG_KEY = 'noita-wand-sim.lang';
 const PREFER_LOCAL_KEY = 'noita-wand-sim.preferLocal';
 const PRESETS_KEY = 'noita-wand-sim.presets';
 const ALWAYS_CAST_KEY = 'noita-wand-sim.alwaysCast';
+const WAND_STICKY_KEY = 'noita-wand-sim.wandSticky';
 
 type Phase = 'boot' | 'empty' | 'loading' | 'ready';
 type SimMode = 'single' | 'untilReload';
@@ -56,6 +57,14 @@ function readAlwaysCastEnabled(): boolean {
     return localStorage.getItem(ALWAYS_CAST_KEY) === '1';
   } catch {
     return false;
+  }
+}
+
+function readWandStickyEnabled(): boolean {
+  try {
+    return localStorage.getItem(WAND_STICKY_KEY) !== '0';
+  } catch {
+    return true;
   }
 }
 
@@ -131,6 +140,7 @@ export default function App() {
   const [bundled, setBundled] = useState<GameData | null>(null);
   const [wand, setWand] = useState<WandState>(readInitialWand);
   const [alwaysCastEnabled, setAlwaysCastEnabled] = useState(readAlwaysCastEnabled);
+  const [wandStickyEnabled, setWandStickyEnabled] = useState(readWandStickyEnabled);
   const [spellTarget, setSpellTarget] = useState<SpellTarget | null>(null);
   const [isMobile] = useState(
     () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent),
@@ -161,15 +171,21 @@ export default function App() {
     }
   }, [alwaysCastEnabled]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(WAND_STICKY_KEY, wandStickyEnabled ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [wandStickyEnabled]);
+
   // Keep the sticky pile panel below the sticky wand bar.
   useEffect(() => {
     const sticky = document.querySelector<HTMLElement>('.wand-sticky');
     if (!sticky) return;
     const update = () => {
-      document.documentElement.style.setProperty(
-        '--wand-sticky-height',
-        `${Math.ceil(sticky.getBoundingClientRect().height)}px`,
-      );
+      const offset = isMobile && !wandStickyEnabled ? 0 : Math.ceil(sticky.getBoundingClientRect().height);
+      document.documentElement.style.setProperty('--wand-sticky-height', `${offset}px`);
     };
     update();
     const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
@@ -179,7 +195,7 @@ export default function App() {
       observer?.disconnect();
       window.removeEventListener('resize', update);
     };
-  }, [phase, alwaysCastEnabled]);
+  }, [phase, alwaysCastEnabled, wandStickyEnabled, isMobile]);
 
   // Boot: bundled data first (zero setup), local import only when the user asked for it.
   useEffect(() => {
@@ -488,6 +504,8 @@ export default function App() {
                 copied={copied}
                 alwaysCastEnabled={alwaysCastEnabled}
                 onAlwaysCastToggle={setAlwaysCastEnabled}
+                wandStickyEnabled={wandStickyEnabled}
+                onWandStickyToggle={setWandStickyEnabled}
                 isMobile={isMobile}
                 spellTarget={spellTarget}
                 onSlotTarget={isMobile ? chooseSpellTarget : undefined}

@@ -42,6 +42,8 @@ interface Props {
   copied: boolean;
   alwaysCastEnabled: boolean;
   onAlwaysCastToggle: (enabled: boolean) => void;
+  wandStickyEnabled: boolean;
+  onWandStickyToggle: (enabled: boolean) => void;
   isMobile: boolean;
   spellTarget?: SpellTarget | null;
   onSlotTarget?: (kind: SpellTarget['kind'], index: number) => void;
@@ -125,6 +127,8 @@ export function WandEditor({
   copied,
   alwaysCastEnabled,
   onAlwaysCastToggle,
+  wandStickyEnabled,
+  onWandStickyToggle,
   isMobile,
   spellTarget = null,
   onSlotTarget,
@@ -182,9 +186,21 @@ export function WandEditor({
 
   return (
     <>
-      <section className="panel wand-sticky">
+      <section className={`panel wand-sticky${isMobile && !wandStickyEnabled ? ' wand-sticky-off' : ''}`}>
         <div className="wand-sticky-head">
-          <span className="wand-sticky-name">{wand.name || t(lang, 'editor.title')}</span>
+          <div className="wand-sticky-title">
+            <span className="wand-sticky-name">{wand.name || t(lang, 'editor.title')}</span>
+            {isMobile && (
+              <label className="wand-sticky-toggle">
+                <input
+                  type="checkbox"
+                  checked={wandStickyEnabled}
+                  onChange={(event) => onWandStickyToggle(event.target.checked)}
+                />
+                <span>{t(lang, 'editor.wandSticky')}</span>
+              </label>
+            )}
+          </div>
           <span className="panel-sub">
             {t(lang, 'editor.slotsUsed', { n: used, capacity: wand.capacity })}
           </span>

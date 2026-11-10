@@ -207,6 +207,12 @@ await sleep(700);
 await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'mobile UA reload');
 await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
 await sleep(300);
+const stickyToggle = await evaluate("(() => { const input = document.querySelector('.wand-sticky-toggle input'); return input ? input.checked : null; })()");
+if (stickyToggle !== true) throw new Error('mobile wand sticky toggle should default on: ' + stickyToggle);
+await evaluate("document.querySelector('.wand-sticky-toggle input').click(); true");
+await waitFor("getComputedStyle(document.querySelector('.wand-sticky')).position === 'static'", 10000, 'wand sticky off');
+await evaluate("document.querySelector('.wand-sticky-toggle input').click(); true");
+await waitFor("getComputedStyle(document.querySelector('.wand-sticky')).position === 'sticky'", 10000, 'wand sticky back on');
 const mobileWandRows = await evaluate(`(() => {
   const slots = document.querySelector('.wand-slots');
   const tops = [...new Set([...slots.querySelectorAll('.wand-slot')].map((el) => Math.round(el.getBoundingClientRect().top)))];
