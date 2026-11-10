@@ -1387,7 +1387,11 @@ function ShotCard({
         <span className="shot-stat">
           {t(lang, 'result.recharge')} {formatFramesAsSeconds(shot.reloadTimeFrames ?? shot.reloadFrames)}s
         </span>
-        {shot.reloaded && <span className="badge reloaded">{t(lang, 'result.reloaded')}</span>}
+        {shot.reloaded && (
+          <span className="badge reloaded" title={t(lang, 'result.reloadedHint')}>
+            {t(lang, 'result.reloaded')}
+          </span>
+        )}
       </header>
 
       <SpellSummary tree={shot.tree} data={data} lang={lang} maps={maps} />
