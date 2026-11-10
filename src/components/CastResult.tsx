@@ -166,7 +166,9 @@ function nodeSignature(node: CastTreeNode): string {
       // fold repeated casts of the same spell regardless of their internal copy counts
       return `action(${node.id})`;
     case 'trigger':
-      return `trigger(${node.triggerKind},${node.projectile ?? '-'})`;
+      // keep the payload shape in the signature: two triggers on the same projectile but
+      // with different payloads must not fold into one
+      return `trigger(${node.triggerKind},${node.projectile ?? '-'})[${childSignature(node.children)}]`;
     case 'discard':
       return `discard(${node.spellId})`;
     default:
@@ -288,17 +290,23 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
         if (spell?.type === 'modifier') {
           modifierCounts.set(node.id, (modifierCounts.get(node.id) ?? 0) + 1);
         }
+        // multiple related projectiles (e.g. BUCKSHOT) can each carry their own trigger;
+        // pair them in order instead of always matching the first trigger node
+        const triggerNodes = node.children.filter(
+          (child): child is Extract<CastTreeNode, { kind: 'trigger' }> => child.kind === 'trigger',
+        );
+        const usedTriggers = new Set<number>();
         for (const entity of node.projectiles) {
-          const triggerNode = node.children.find(
-            (child): child is Extract<CastTreeNode, { kind: 'trigger' }> =>
-              child.kind === 'trigger' && child.projectile === entity,
+          const triggerIndex = triggerNodes.findIndex(
+            (trigger, index) => !usedTriggers.has(index) && trigger.projectile === entity,
           );
-          collected.push({
-            entity,
-            trigger: triggerNode
-              ? { kind: triggerNode.triggerKind, payload: summarizeNodes(triggerNode.children, maps) }
-              : undefined,
-          });
+          let trigger: SummaryTrigger | undefined;
+          if (triggerIndex >= 0) {
+            usedTriggers.add(triggerIndex);
+            const triggerNode = triggerNodes[triggerIndex];
+            trigger = { kind: triggerNode.triggerKind, payload: summarizeNodes(triggerNode.children, maps) };
+          }
+          collected.push({ entity, trigger });
         }
         node.children.forEach((child) => {
           // a trigger node belongs to the projectile that carries it: its payload was

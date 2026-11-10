@@ -167,6 +167,39 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(payload?.actions[0].delta?.fire_rate_wait).toBe(100);
   });
 
+  it('ADD_TRIGGER on BUCKSHOT gives one trigger per related projectile and draws payloads sequentially', () => {
+    const shot = engine.simulate(wand(['ADD_TRIGGER', 'BUCKSHOT', 'BOMB']), { mana: 1000 }).shots[0];
+    const outer = shot.block.projectiles;
+    expect(outer).toHaveLength(3); // BUCKSHOT related_projectiles count = 3
+    expect(outer.every((projectile) => projectile.entity.endsWith('buckshot_player.xml'))).toBe(true);
+    expect(outer.every((projectile) => projectile.triggerKind === 'hitWorld')).toBe(true);
+
+    const entityNames = (projectiles: { entity: string }[]) => projectiles.map((p) => p.entity.split('/').pop());
+    // 1st payload: BOMB
+    expect(entityNames(outer[0].trigger?.projectiles ?? [])).toEqual(['bomb.xml']);
+    // 2nd payload: the deck was empty, instant reload moved the discarded BUCKSHOT back,
+    // so the second trigger itself casts BUCKSHOT (3 plain projectiles in its payload)
+    expect(entityNames(outer[1].trigger?.projectiles ?? [])).toEqual([
+      'buckshot_player.xml',
+      'buckshot_player.xml',
+      'buckshot_player.xml',
+    ]);
+    // 3rd payload: discard was empty again -> no payload
+    expect(outer[2].trigger?.projectiles ?? []).toHaveLength(0);
+
+    // the draw event after the instant reload must report the real card, not "empty"
+    const drawnCards = shot.events.flatMap((event) =>
+      event.type === 'drawCard' && event.spellId ? [event.spellId] : [],
+    );
+    expect(drawnCards).toEqual(expect.arrayContaining(['BOMB', 'BUCKSHOT']));
+
+    // with no projectile after the target, Add Trigger cannot create payloads: the target
+    // is invoked with dont-draw and fires 3 plain projectiles without triggers
+    const noPayload = engine.simulate(wand(['ADD_TRIGGER', 'BUCKSHOT']), { mana: 1000 }).shots[0];
+    expect(noPayload.block.projectiles).toHaveLength(3);
+    expect(noPayload.block.projectiles.every((projectile) => projectile.trigger === undefined)).toBe(true);
+  });
+
   it('reports discarded cards (hand flush and spell discards)', () => {
     const shot = engine.simulate(wand(['LIGHT_BULLET', 'BOMB'], { actions_per_round: 2 })).shots[0];
     const discardEvents = shot.events.filter((event) => event.type === 'discard');

@@ -327,12 +327,22 @@ function __install_hooks()
   local orig_draw_action = draw_action
   function draw_action(instant_reload_if_empty)
     local before = #deck
+    local before_hand = #hand
     local top = nil
     if deck[1] then top = deck[1].id end
     __inside_draw_action = true
     local ok = orig_draw_action(instant_reload_if_empty)
     __inside_draw_action = false
-    __ev('drawCard', top, before, #deck, ok)
+    -- after an instant reload the top card may only be known after the draw; report the
+    -- card that actually entered the hand (fallback: the card removed from the deck)
+    local drawn = top
+    if ok and #hand > before_hand then
+      local card = hand[before_hand + 1]
+      if type(card) == 'table' and card.id then
+        drawn = card.id
+      end
+    end
+    __ev('drawCard', drawn, before, #deck, ok)
     __ev('draw', before, #deck, state_cards_drawn, ok)
     return ok
   end
