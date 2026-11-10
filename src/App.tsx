@@ -441,6 +441,10 @@ export default function App() {
             </button>
           </p>
         )}
+        <p className="footer-feedback">
+          {t(lang, 'footer.feedback')}
+          <a href="mailto:heipen111@foxmail.com">heipen111@foxmail.com</a>
+        </p>
         <p className="footer-meta">
           <span>{t(lang, 'footer.madeWith')}</span>
           <span className="footer-sep">·</span>

@@ -77,7 +77,7 @@ const DELTA_FORMATS: Record<string, { label: string; kind: 'seconds' | 'number' 
   damage_critical_chance: { label: 'delta.critChance', kind: 'percent' },
   spread_degrees: { label: 'delta.spread', kind: 'degrees' },
   speed_multiplier: { label: 'delta.speed', kind: 'multiplier' },
-  lifetime_add: { label: 'delta.lifetime', kind: 'number' },
+  lifetime_add: { label: 'delta.lifetime', kind: 'seconds' },
   bounces: { label: 'delta.bounces', kind: 'number' },
   explosion_radius: { label: 'delta.explosionRadius', kind: 'number' },
   screenshake: { label: 'delta.screenshake', kind: 'number' },
@@ -160,11 +160,13 @@ function nodeSignature(node: CastTreeNode): string {
     case 'drawBlock':
       return `draw[${childSignature(node.children)}]`;
     case 'drawCard':
-      // fold by the card itself; nested differences are visible when expanding
-      return `card(${node.spellId ?? '-'},${node.ok})`;
+      // include the child action/draw shape: the same card drawn into different
+      // sub-branches must not fold together
+      return `card(${node.spellId ?? '-'},${node.ok})[${childSignature(node.children)}]`;
     case 'action':
-      // fold repeated casts of the same spell regardless of their internal copy counts
-      return `action(${node.id})`;
+      // fold repeated casts of the same spell only when their nested branches match;
+      // Divide By copies with different payloads must stay separate
+      return `action(${node.id})[${childSignature(node.children)}]${node.projectiles.join(',')}`;
     case 'trigger':
       // keep the payload shape in the signature: two triggers on the same projectile but
       // with different payloads must not fold into one
@@ -397,16 +399,17 @@ function CessationLifetimeBadge({
   if (node.id !== 'CESSATION' || node.lifetimeAdd === undefined) return null;
   const bonus = node.lifetimeAdd;
   const frames = CESSATION_BASE_LIFETIME + bonus;
+  const seconds = formatFramesAsSeconds(frames);
+  const bonusSeconds = formatFramesAsSeconds(bonus, { signed: true });
   return (
     <span
       className={`tree-effect${bonus !== 0 ? ' active' : ''}`}
-      title={t(lang, 'tree.cessationHint', { bonus, frames })}
+      title={t(lang, 'tree.cessationHint', { seconds, bonusSeconds })}
     >
-      {t(lang, 'tree.cessationLifetime', { frames, seconds: formatFramesAsSeconds(frames) })}
+      {t(lang, 'tree.cessationLifetime', { seconds })}
       {bonus !== 0 && (
         <sup>
-          {bonus > 0 ? '+' : ''}
-          {bonus}
+          {bonusSeconds}s
         </sup>
       )}
     </span>
@@ -422,7 +425,7 @@ const SUMMARY_STATE_ROWS: {
   { key: 'damage_critical_chance', format: 'percent' },
   { key: 'spread_degrees', format: 'degrees' },
   { key: 'speed_multiplier', format: 'multiplier' },
-  { key: 'lifetime_add', format: 'number' },
+  { key: 'lifetime_add', format: 'seconds' },
   { key: 'bounces', format: 'number' },
   { key: 'explosion_radius', format: 'number' },
 ];
@@ -609,19 +612,20 @@ function SpellSummary({
                 <span
                   className="summary-effect"
                   key={index}
-                  title={t(lang, 'tree.cessationHint', { bonus: effect.bonus, frames: effect.frames })}
+                  title={t(lang, 'tree.cessationHint', {
+                    seconds: formatFramesAsSeconds(effect.frames),
+                    bonusSeconds: formatFramesAsSeconds(effect.bonus, { signed: true }),
+                  })}
                 >
                   <SpellIcon spell={maps.byId.get('CESSATION')} data={data} />
                   <span>
                     {t(lang, 'summary.cessation', {
-                      frames: effect.frames,
                       seconds: formatFramesAsSeconds(effect.frames),
                     })}
                   </span>
                   {effect.bonus !== 0 && (
                     <span className="summary-effect-bonus">
-                      {effect.bonus > 0 ? '+' : ''}
-                      {effect.bonus}
+                      {formatFramesAsSeconds(effect.bonus, { signed: true })}s
                     </span>
                   )}
                   {effect.count > 1 && <span className="summary-effect-count">×{effect.count}</span>}

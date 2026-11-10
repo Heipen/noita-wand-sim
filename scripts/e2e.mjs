@@ -111,10 +111,12 @@ const stats = await waitFor("document.querySelector('.count')?.innerText || ''",
 console.log('✓ bundled data:', stats.replace(/\n/g, ' | '));
 if (!/422/.test(stats)) throw new Error('expected 422 spells');
 const footerInfo = await evaluate(
-  "({ href: document.querySelector('.app-footer a')?.href || '', text: document.querySelector('.app-footer')?.innerText || '' })",
+  "({ href: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.includes('github.com/Heipen/noita-wand-sim'))?.href || '', mail: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.startsWith('mailto:heipen111@foxmail.com'))?.href || '', icon: document.querySelector('link[rel=icon]')?.href || '', text: document.querySelector('.app-footer')?.innerText || '' })",
 );
 if (!footerInfo.href.includes('github.com/Heipen/noita-wand-sim')) throw new Error('footer repo link missing: ' + JSON.stringify(footerInfo));
+if (footerInfo.mail !== 'mailto:heipen111@foxmail.com') throw new Error('footer feedback mail link missing: ' + JSON.stringify(footerInfo));
 if (!footerInfo.text.includes('DSH') || !footerInfo.text.includes('Star')) throw new Error('footer attribution/star note missing: ' + footerInfo.text);
+if (!footerInfo.icon.endsWith('/favicon.png')) throw new Error('digger favicon missing: ' + JSON.stringify(footerInfo));
 
 // 2) default trigger wand -> cast tree (worker engine)
 const shotText = await waitFor("document.querySelector('.shot-card')?.innerText || ''", 60000, 'first shot');
@@ -306,6 +308,27 @@ const slotRows = await evaluate(`(() => {
 if (slotRows !== 1) throw new Error('26 wand slots should fit in one row, got rows: ' + slotRows);
 await evaluate(`(${setNumberInput})(1, 40); true`);
 await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 40", 10000, 'capacity 40 slots');
+// huge capacities must not make the sticky wand cover a small screen
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await sleep(200);
+await evaluate(`(${setNumberInput})(1, 100); true`);
+await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 100", 10000, 'capacity 100 slots');
+const mobileWand = await evaluate(`(() => {
+  const sticky = document.querySelector('.wand-sticky');
+  const slots = document.querySelector('.wand-slots');
+  return {
+    height: sticky.getBoundingClientRect().height,
+    viewport: window.innerHeight,
+    scrollWidth: slots.scrollWidth,
+    clientWidth: slots.clientWidth,
+  };
+})()`);
+if (mobileWand.height > mobileWand.viewport * 0.6) throw new Error('sticky wand is too tall on mobile: ' + JSON.stringify(mobileWand));
+if (mobileWand.scrollWidth <= mobileWand.clientWidth) throw new Error('wand slots should scroll horizontally instead of wrapping: ' + JSON.stringify(mobileWand));
+await evaluate(`(${setNumberInput})(1, 40); true`);
+await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 40", 10000, 'capacity back to 40');
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+await sleep(250);
 // numeric inputs must allow being fully cleared while editing, then restore/clamp on blur
 const clearedDraft = await evaluate(`(() => {
   const input = document.querySelectorAll('.wand-stats input[type=number]')[1];

@@ -104,6 +104,28 @@ describe('cast tree repeat folding', () => {
     expect(slots).toEqual([0, 1, 2]);
   });
 
+  it('does not fold same-id actions whose nested branches differ', () => {
+    const grouped = groupTree(
+      cast([
+        action('A', [card('X', action('X'))]),
+        action('A', [card('Y', action('Y'))]),
+      ]),
+      true,
+    );
+    expect(grouped.children).toHaveLength(2);
+  });
+
+  it('does not fold same-card draws whose nested actions differ', () => {
+    const grouped = groupTree(
+      cast([
+        card('X', action('A')),
+        card('X', action('B')),
+      ]),
+      true,
+    );
+    expect(grouped.children).toHaveLength(2);
+  });
+
   it('keeps non-adjacent identical nodes in their original order (no reordering)', () => {
     const grouped = groupTree(cast([action('A'), action('B'), action('A')]), true);
     // A and B differ, and the two A nodes are separated by B: folding them into one

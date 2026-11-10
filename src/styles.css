@@ -361,8 +361,15 @@ main {
 }
 
 .footer-note,
-.footer-meta {
+.footer-meta,
+.footer-feedback {
   margin: 2px 0;
+}
+
+.footer-feedback a {
+  color: var(--accent-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .footer-meta {
@@ -515,11 +522,16 @@ main {
 
 .wand-slots {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 3px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
 
 .wand-slot {
+  flex: 0 0 auto;
   position: relative;
   width: 40px;
   height: 40px;
@@ -1849,6 +1861,18 @@ main {
 
   .shot-columns {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .wand-sticky {
+    max-height: 38vh;
+    overflow-y: auto;
+  }
+
+  .wand-slot {
+    width: 36px;
+    height: 36px;
   }
 }
 
