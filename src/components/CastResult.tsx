@@ -130,37 +130,27 @@ type GroupedEntry =
   | { kind: 'sequence'; count: number; pattern: GroupedEntry[]; sig: string; id: string };
 
 function childSignature(children: CastTreeNode[]): string {
-  // Ignore repeated copies (and their counts) when comparing trees: two copies of the
-  // same process that execute a different number of identical sub-actions should still
-  // fold together. Consecutive duplicates are collapsed, order is preserved otherwise.
+  // Ignore repeated copies entirely when comparing trees: two copies of the same process
+  // that execute a different number of identical sub-actions should still fold together.
+  // Keep the order in which different children first appear.
   const sigs = children.map(nodeSignature);
-  const compressed: string[] = [];
-  let last = '';
-  for (const sig of sigs) {
-    if (sig !== last) {
-      compressed.push(sig);
-      last = sig;
-    }
-  }
-  return compressed.join(',');
+  return [...new Set(sigs)].join(',');
 }
 
 function nodeSignature(node: CastTreeNode): string {
   switch (node.kind) {
     case 'cast':
-      return `cast[${childSignature(node.children)}]`;
+      return 'cast';
     case 'drawBlock':
       return `draw[${childSignature(node.children)}]`;
     case 'drawCard':
-      return `card(${node.spellId ?? '-'},${node.ok})[${childSignature(node.children)}]`;
-    case 'action': {
-      const delta = node.delta ? JSON.stringify(Object.entries(node.delta).sort()) : '';
-      // `dontDraw` / `iteration` are deliberately not part of the signature: the same
-      // process repeated with different copy bookkeeping should still fold together.
-      return `action(${node.id},${node.recursion ?? '-'},${node.permanent},${node.projectiles.join('|')},${delta})[${childSignature(node.children)}]`;
-    }
+      // fold by the card itself; nested differences are visible when expanding
+      return `card(${node.spellId ?? '-'},${node.ok})`;
+    case 'action':
+      // fold repeated casts of the same spell regardless of their internal copy counts
+      return `action(${node.id})`;
     case 'trigger':
-      return `trigger(${node.triggerKind},${node.projectile ?? '-'})[${childSignature(node.children)}]`;
+      return `trigger(${node.triggerKind},${node.projectile ?? '-'})`;
     case 'discard':
       return `discard(${node.spellId})`;
     default:
@@ -677,35 +667,54 @@ function TreeEntryView({
       </div>
     );
   }
-  if (entry.repeat > 1 && expanded.has(entry.id)) {
+  if (entry.repeat > 1) {
+    const isExpanded = expanded.has(entry.id);
+    const color = sequenceColor(level);
     return (
-      <div className="tree-expanded-group">
+      <div
+        className={`tree-sequence tree-repeat-block${isExpanded ? ' expanded' : ''}`}
+        style={{ borderLeftColor: color, background: `${color}1f` }}
+      >
         <button
           type="button"
-          className="tree-collapse"
+          className="tree-sequence-head tree-repeat"
           onClick={() => onToggle(entry.id)}
-          title={t(lang, 'tree.foldAgain')}
+          title={t(lang, isExpanded ? 'tree.foldAgain' : 'tree.expand')}
+          style={{ color }}
         >
-          ×{entry.repeat} {t(lang, 'tree.collapse')}
+          <span className="tree-sequence-count">×{entry.repeat}</span>
+          <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
         </button>
-        {Array.from({ length: entry.repeat }, (_, rep) => (
-          <TreeNodeView
-            key={`${entry.id}-${rep}`}
-            group={entry.group}
-            repeat={1}
-            groupId={entry.id}
-            expanded={expanded}
-            onToggle={onToggle}
-            data={data}
-            lang={lang}
-            maps={maps}
-            showDeltas={showDeltas}
-            slotMap={slotMap}
-            parentDontDraw={parentDontDraw}
-            parentKind={parentKind}
-            level={level}
-          />
-        ))}
+        <div className="tree-sequence-body">
+          {Array.from({ length: isExpanded ? entry.repeat : 1 }, (_, rep) => (
+            <TreeNodeView
+              key={`${entry.id}-${rep}`}
+              group={entry.group}
+              repeat={1}
+              groupId={entry.id}
+              expanded={expanded}
+              onToggle={onToggle}
+              data={data}
+              lang={lang}
+              maps={maps}
+              showDeltas={showDeltas}
+              slotMap={slotMap}
+              parentDontDraw={parentDontDraw}
+              parentKind={parentKind}
+              level={level + 1}
+            />
+          ))}
+        </div>
+        {isExpanded && (
+          <button
+            type="button"
+            className="tree-collapse"
+            onClick={() => onToggle(entry.id)}
+            title={t(lang, 'tree.foldAgain')}
+          >
+            ×{entry.repeat} {t(lang, 'tree.collapse')}
+          </button>
+        )}
       </div>
     );
   }
