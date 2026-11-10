@@ -3,6 +3,20 @@ import { describe, expect, it } from 'vitest';
 import { groupTree, type GroupedEntry, type GroupedNode } from '../src/components/CastResult';
 import type { CastTreeNode } from '../src/engine/types';
 
+function actionAt(id: string, deckIndex: number): CastTreeNode {
+  return {
+    kind: 'action',
+    id,
+    deckIndex,
+    recursion: null,
+    iteration: null,
+    dontDraw: false,
+    permanent: false,
+    projectiles: [],
+    children: [],
+  };
+}
+
 function action(id: string, children: CastTreeNode[] = []): CastTreeNode {
   return {
     kind: 'action',
@@ -73,6 +87,21 @@ describe('cast tree repeat folding', () => {
     const entry = grouped.children[0];
     expect(entry.kind).toBe('node');
     if (entry.kind === 'node') expect(entry.repeat).toBe(2);
+  });
+
+  it('keeps every concrete copy so expanding shows the real slot numbers', () => {
+    const grouped = groupTree(
+      cast([actionAt('A', 0), actionAt('A', 1), actionAt('A', 2)]),
+      true,
+    );
+    expect(grouped.children).toHaveLength(1);
+    const entry = grouped.children[0];
+    expect(entry.kind).toBe('node');
+    if (entry.kind !== 'node') throw new Error('expected node');
+    expect(entry.repeat).toBe(3);
+    expect(entry.copies).toHaveLength(3);
+    const slots = entry.copies.map((copy) => (copy.node.kind === 'action' ? copy.node.deckIndex : null));
+    expect(slots).toEqual([0, 1, 2]);
   });
 
   it('keeps non-adjacent identical nodes in their original order (no reordering)', () => {

@@ -126,8 +126,24 @@ interface GroupedNode {
 }
 
 type GroupedEntry =
-  | { kind: 'node'; group: GroupedNode; repeat: number; sig: string; id: string }
-  | { kind: 'sequence'; count: number; pattern: GroupedEntry[]; sig: string; id: string };
+  | {
+      kind: 'node';
+      group: GroupedNode;
+      /** Every concrete occurrence in this folded run (in order). */
+      copies: GroupedNode[];
+      repeat: number;
+      sig: string;
+      id: string;
+    }
+  | {
+      kind: 'sequence';
+      count: number;
+      pattern: GroupedEntry[];
+      /** The concrete pattern of every repetition, so expanding shows real slot numbers. */
+      instances: GroupedEntry[][];
+      sig: string;
+      id: string;
+    };
 
 function childSignature(children: CastTreeNode[]): string {
   // Ignore repeated copies entirely when comparing trees: two copies of the same process
@@ -180,7 +196,17 @@ function foldSequences(entries: GroupedEntry[], path: string): GroupedEntry[] {
         else break;
       }
       if (repeats >= 2) {
-        out.push({ kind: 'sequence', count: repeats, pattern, sig: patternSigs.join('+'), id: `${path}.seq${out.length}` });
+        const instances = Array.from({ length: repeats }, (_, rep) =>
+          entries.slice(index + rep * period, index + (rep + 1) * period),
+        );
+        out.push({
+          kind: 'sequence',
+          count: repeats,
+          pattern: instances[0],
+          instances,
+          sig: patternSigs.join('+'),
+          id: `${path}.seq${out.length}`,
+        });
         index += period * repeats;
         folded = true;
         break;
@@ -203,6 +229,7 @@ function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean, path: string)
     return built.map((group, index) => ({
       kind: 'node',
       group,
+      copies: [group],
       repeat: 1,
       sig: nodeSignature(group.node),
       id: `${path}.${index}`,
@@ -213,9 +240,17 @@ function groupEntries(nodes: CastTreeNode[], foldRepeats: boolean, path: string)
     const sig = nodeSignature(group.node);
     const last = collapsed[collapsed.length - 1];
     if (last && last.kind === 'node' && last.sig === sig) {
+      last.copies.push(group);
       last.repeat += 1;
     } else {
-      collapsed.push({ kind: 'node', group, repeat: 1, sig, id: `${path}.${collapsed.length}` });
+      collapsed.push({
+        kind: 'node',
+        group,
+        copies: [group],
+        repeat: 1,
+        sig,
+        id: `${path}.${collapsed.length}`,
+      });
     }
   }
   return foldSequences(collapsed, path);
@@ -625,7 +660,6 @@ function TreeEntryView({
 }) {
   if (entry.kind === 'sequence') {
     const isExpanded = expanded.has(entry.id);
-    const reps = isExpanded ? entry.count : 1;
     const color = sequenceColor(level);
     return (
       <div
@@ -643,9 +677,9 @@ function TreeEntryView({
           <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
         </button>
         <div className="tree-sequence-body">
-          {Array.from({ length: reps }, (_, rep) => (
+          {(isExpanded ? entry.instances : [entry.pattern]).map((instance, rep) => (
             <div className="tree-sequence-rep" key={rep}>
-              {entry.pattern.map((item, index) => (
+              {instance.map((item, index) => (
                 <TreeEntryView
                   key={`${item.id}-${index}-${rep}`}
                   entry={item}
@@ -686,10 +720,10 @@ function TreeEntryView({
           <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
         </button>
         <div className="tree-sequence-body">
-          {Array.from({ length: isExpanded ? entry.repeat : 1 }, (_, rep) => (
+          {(isExpanded ? entry.copies : [entry.copies[0] ?? entry.group]).map((copy, rep) => (
             <TreeNodeView
               key={`${entry.id}-${rep}`}
-              group={entry.group}
+              group={copy}
               repeat={1}
               groupId={entry.id}
               expanded={expanded}
@@ -756,6 +790,8 @@ interface StoryStep {
   groupId?: string;
   /** For a folded multi-line story sequence: the repeated pattern and its repetition count. */
   pattern?: StoryStep[];
+  /** The concrete steps of every repetition (keeps distinct slot numbers when expanded). */
+  instances?: StoryStep[][];
   count?: number;
 }
 
@@ -793,6 +829,9 @@ function foldStorySteps(steps: StoryStep[], lang: Lang): StoryStep[] {
         else break;
       }
       if (repeats >= 2) {
+        const instances = Array.from({ length: repeats }, (_, rep) =>
+          foldStorySteps(steps.slice(index + rep * period, index + (rep + 1) * period), lang),
+        );
         out.push({
           depth: steps[index].depth,
           tone: 'sequence',
@@ -800,7 +839,8 @@ function foldStorySteps(steps: StoryStep[], lang: Lang): StoryStep[] {
           deltas: [],
           groupId: `story-${index}-${period}`,
           count: repeats,
-          pattern: foldStorySteps(pattern, lang),
+          pattern: instances[0],
+          instances,
         });
         index += period * repeats;
         folded = true;
@@ -1057,7 +1097,7 @@ function buildStory(
     }
   };
 
-  walkEntry({ kind: 'node', group: root, repeat: 1, sig: '', id: 'root' }, 0, {});
+  walkEntry({ kind: 'node', group: root, copies: [root], repeat: 1, sig: '', id: 'root' }, 0, {});
   return steps;
 }
 
@@ -1194,7 +1234,7 @@ function ShotCard({
       const marginLeft = (step.depth - baseDepth) * INDENT;
       if (step.pattern && step.groupId) {
         const isExpanded = expanded.has(step.groupId);
-        const reps = isExpanded ? step.count ?? 1 : 1;
+        const groups = isExpanded ? step.instances ?? [step.pattern] : [step.pattern];
         const color = sequenceColor(level);
         return (
           <li
@@ -1215,9 +1255,9 @@ function ShotCard({
               className="step-sublist"
               style={{ boxShadow: `inset 3px 0 0 ${color}`, background: `${color}0d` }}
             >
-              {Array.from({ length: reps }, (_, rep) => (
+              {groups.map((group, rep) => (
                 <Fragment key={rep}>
-                  {renderStorySteps(step.pattern!, step.depth, `${key}-${rep}-`, level + 1)}
+                  {renderStorySteps(group, step.depth, `${key}-${rep}-`, level + 1)}
                 </Fragment>
               ))}
             </ol>
