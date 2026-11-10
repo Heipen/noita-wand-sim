@@ -6,3 +6,6 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+
+# local development notes (plans, terminology, design docs)
+docs/
