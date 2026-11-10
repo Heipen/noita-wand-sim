@@ -1130,6 +1130,12 @@ main {
   color: #b9c8dd;
 }
 
+.cast-block-chip.changed {
+  border-color: #f1c40f;
+  background: rgba(241, 196, 15, 0.16);
+  box-shadow: 0 0 0 1px rgba(241, 196, 15, 0.5);
+}
+
 .cast-block-chip .mini-icon {
   width: 14px;
   height: 14px;

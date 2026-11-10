@@ -1622,6 +1622,16 @@ interface CastBlockGroup {
   actions: { id: string; count: number }[];
 }
 
+function castBlockActionCounts(blocks: CastBlockGroup[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const block of blocks) {
+    for (const action of block.actions) {
+      counts.set(action.id, (counts.get(action.id) ?? 0) + action.count);
+    }
+  }
+  return counts;
+}
+
 /** Actions of every cast block (root + trigger payloads) in execution order, repeats merged. */
 function groupCastBlocks(tree: CastTreeNode, upToEvent: number | null): CastBlockGroup[] {
   const payloadBlocks: CastBlockGroup[] = [];
@@ -1764,6 +1774,16 @@ function ShotCard({
     () => groupCastBlocks(shot.tree, selectedEvent),
     [shot.tree, selectedEvent],
   );
+  const changedActionIds = useMemo(() => {
+    if (selectedEvent === null) return new Set<string>();
+    const current = castBlockActionCounts(castBlockGroups);
+    const previous = castBlockActionCounts(groupCastBlocks(shot.tree, selectedEvent - 1));
+    const changed = new Set<string>();
+    for (const [id, count] of current) {
+      if (count > (previous.get(id) ?? 0)) changed.add(id);
+    }
+    return changed;
+  }, [castBlockGroups, shot.tree, selectedEvent]);
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
   const grouped = useMemo(() => groupTree(shot.tree, foldRepeats), [shot.tree, foldRepeats]);
   // 施法过程暂时停用：保留全部实现，需要恢复时把 SHOW_CASTING_STEPS 改成 true。
@@ -1941,7 +1961,7 @@ function ShotCard({
                       const name = spellName(spell, id, lang);
                       return (
                         <span
-                          className="cast-block-chip"
+                          className={`cast-block-chip${changedActionIds.has(id) ? ' changed' : ''}`}
                           title={`${name} ×${count}`}
                           aria-label={`${name} ×${count}`}
                           key={id}
