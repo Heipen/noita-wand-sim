@@ -71,6 +71,24 @@ function __pile_snapshot()
   }
 end
 
+-- Only copy a pile snapshot when the piles actually changed since the previous one.
+-- Most cast steps leave deck/hand/discard untouched; reusing the previous snapshot keeps
+-- the event log small and avoids copying arrays on every action.
+local function __ids_equal(list, previous)
+  if #list ~= #previous then return false end
+  for i = 1, #list do
+    if list[i].id ~= previous[i] then return false end
+  end
+  return true
+end
+
+local function __piles_unchanged(previous)
+  return previous ~= nil
+    and __ids_equal(deck, previous.deck)
+    and __ids_equal(hand, previous.hand)
+    and __ids_equal(discarded, previous.discarded)
+end
+
 local __pile_event_names = {
   callAction = true,
   drawCard = true,
@@ -82,7 +100,10 @@ function __ev(name, ...)
   local n = select('#', ...)
   local t = { name = name }
   for i = 1, n do t[i] = select(i, ...) end
-  if __pile_event_names[name] then t.piles = __pile_snapshot() end
+  if __pile_event_names[name] and not __piles_unchanged(__last_pile_snapshot) then
+    __last_pile_snapshot = __pile_snapshot()
+    t.piles = __last_pile_snapshot
+  end
   __events[#__events + 1] = t
 end
 
@@ -90,6 +111,7 @@ function __reset_events()
   __events = {}
   __last_state = nil
   __last_reload_time = nil
+  __last_pile_snapshot = nil
   __not_enough = false
 end
 
