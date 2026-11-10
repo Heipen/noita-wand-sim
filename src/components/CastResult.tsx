@@ -630,7 +630,7 @@ function TreeEntryView({
     return (
       <div
         className={`tree-sequence${isExpanded ? ' expanded' : ''}`}
-        style={{ borderLeftColor: color, background: `${color}1f` }}
+        style={{ boxShadow: `inset 4px 0 0 ${color}`, background: `${color}14` }}
       >
         <button
           type="button"
@@ -673,7 +673,7 @@ function TreeEntryView({
     return (
       <div
         className={`tree-sequence tree-repeat-block${isExpanded ? ' expanded' : ''}`}
-        style={{ borderLeftColor: color, background: `${color}1f` }}
+        style={{ boxShadow: `inset 4px 0 0 ${color}`, background: `${color}14` }}
       >
         <button
           type="button"
@@ -1200,7 +1200,7 @@ function ShotCard({
           <li
             key={key}
             className="step step-sequence"
-            style={{ marginLeft, borderLeftColor: color, background: `${color}1a` }}
+            style={{ marginLeft, boxShadow: `inset 3px 0 0 ${color}`, background: `${color}12` }}
           >
             <button
               type="button"
@@ -1213,7 +1213,7 @@ function ShotCard({
             </button>
             <ol
               className="step-sublist"
-              style={{ borderLeftColor: color, background: `${color}12` }}
+              style={{ boxShadow: `inset 3px 0 0 ${color}`, background: `${color}0d` }}
             >
               {Array.from({ length: reps }, (_, rep) => (
                 <Fragment key={rep}>
