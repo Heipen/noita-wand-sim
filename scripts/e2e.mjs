@@ -321,6 +321,15 @@ const bloodChips = await evaluate("[...document.querySelectorAll('.summary-state
 if (bloodChips.some((text) => /投射物伤害 \+44(?!%)/.test(text))) {
   throw new Error('Blood to Power should not show a fake fixed +44 damage: ' + JSON.stringify(bloodChips));
 }
+if (!bloodChips.some((text) => text.includes('伤害上限 24000'))) {
+  throw new Error('Blood to Power should show its 24000 damage cap: ' + JSON.stringify(bloodChips));
+}
+await loadWand(['MONEY_MAGIC', 'LIGHT_BULLET']);
+await waitFor(
+  "[...document.querySelectorAll('.summary-state-chip')].some((el) => el.innerText.includes('10909'))",
+  60000,
+  'gold to power formula chip',
+);
 console.log('✓ Blood/Gold to Power use formula notes instead of fixed player stats');
 
 // 4) divide-by-10 chain => 800 projectiles
