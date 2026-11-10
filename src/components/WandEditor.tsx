@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { PRESETS } from '../data/presets';
 import { formatFramesAsSeconds } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
 import { t } from '../lib/i18n';
@@ -251,23 +250,11 @@ export function WandEditor({
               const value = event.target.value;
               setSelectedPreset(value);
               if (!value) return;
-              const builtIn = PRESETS.find((item) => item.id === value);
-              if (builtIn) {
-                onChange(builtIn.wand);
-                return;
-              }
               const custom = customPresets.find((item) => item.id === value);
               if (custom) onChange(custom.wand);
             }}
           >
             <option value="">{t(lang, 'editor.presets')}…</option>
-            <optgroup label={t(lang, 'editor.builtinPresets')}>
-              {PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {lang === 'zh' ? preset.nameZh : preset.nameEn}
-                </option>
-              ))}
-            </optgroup>
             {customPresets.length > 0 && (
               <optgroup label={t(lang, 'editor.myPresets')}>
                 {customPresets.map((preset) => (

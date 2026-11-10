@@ -522,10 +522,12 @@ main {
 
 .wand-slots {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 3px;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
+  max-height: 130px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
   padding-bottom: 4px;
   scrollbar-width: thin;
 }
@@ -1505,7 +1507,15 @@ main {
 }
 
 .tree-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0 0 6px;
+}
+
+.tree-total {
+  font-size: 11px;
+  color: var(--muted);
 }
 
 .section-toggle {
@@ -1565,6 +1575,13 @@ main {
 }
 
 .tree-sequence-count {
+  white-space: nowrap;
+}
+
+.tree-sequence-projectiles {
+  font-size: 10px;
+  opacity: 0.75;
+  margin-left: 2px;
   white-space: nowrap;
 }
 
@@ -1873,6 +1890,10 @@ main {
   .wand-slot {
     width: 36px;
     height: 36px;
+  }
+
+  .wand-slots {
+    max-height: 118px;
   }
 }
 

@@ -264,6 +264,23 @@ function groupTree(tree: CastTreeNode, foldRepeats: boolean): GroupedNode {
   return { node: tree, children: groupEntries(tree.children, foldRepeats, 'r') };
 }
 
+function projectileCountOfNode(group: GroupedNode): number {
+  let count = group.node.kind === 'action' ? group.node.projectiles.length : 0;
+  for (const child of group.children) count += projectileCountOfEntry(child);
+  return count;
+}
+
+function projectileCountOfEntry(entry: GroupedEntry): number {
+  if (entry.kind === 'node') {
+    return entry.copies.reduce((sum, copy) => sum + projectileCountOfNode(copy), 0);
+  }
+  const instances = entry.instances ?? Array.from({ length: entry.count }, () => entry.pattern);
+  return instances.reduce(
+    (sum, instance) => sum + instance.reduce((inner, item) => inner + projectileCountOfEntry(item), 0),
+    0,
+  );
+}
+
 export { groupTree };
 export type { GroupedEntry, GroupedNode };
 
@@ -272,6 +289,8 @@ export type { GroupedEntry, GroupedNode };
 interface SummaryTrigger {
   kind: 'timer' | 'hitWorld' | 'death';
   payload: SummaryItem[];
+  /** Accumulated shot state of the payload scope (its own modifiers). */
+  state?: Record<string, number>;
 }
 
 interface SummaryItem {
@@ -279,6 +298,23 @@ interface SummaryItem {
   count: number;
   modifiers: [string, number][];
   trigger?: SummaryTrigger;
+}
+
+function collectScopeState(nodes: CastTreeNode[]): Record<string, number> {
+  // a trigger payload starts from a fresh shot state; reconstruct its stats from the
+  // action deltas in that scope (do not descend into nested triggers, they have their own)
+  const state: Record<string, number> = { speed_multiplier: 1 };
+  const walk = (node: CastTreeNode) => {
+    if (node.kind === 'trigger') return;
+    if (node.kind === 'action') {
+      for (const [key, value] of Object.entries(node.delta ?? {})) {
+        state[key] = (state[key] ?? 0) + value;
+      }
+    }
+    node.children.forEach(walk);
+  };
+  nodes.forEach(walk);
+  return state;
 }
 
 function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
@@ -306,7 +342,11 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
           if (triggerIndex >= 0) {
             usedTriggers.add(triggerIndex);
             const triggerNode = triggerNodes[triggerIndex];
-            trigger = { kind: triggerNode.triggerKind, payload: summarizeNodes(triggerNode.children, maps) };
+            trigger = {
+              kind: triggerNode.triggerKind,
+              payload: summarizeNodes(triggerNode.children, maps),
+              state: collectScopeState(triggerNode.children),
+            };
           }
           collected.push({ entity, trigger });
         }
@@ -435,7 +475,10 @@ function stateValue(
   value: number,
   signed = false,
 ): string {
-  if (format === 'seconds') return formatFramesAsSeconds(value);
+  if (format === 'seconds') {
+    const text = formatFramesAsSeconds(value);
+    return signed && value > 0 ? `+${text}` : text;
+  }
   const text = formatNumber(value);
   return signed && value > 0 ? `+${text}` : text;
 }
@@ -477,7 +520,7 @@ function SummaryItemCard({
 }) {
   const spell = maps.byEntity.get(item.entity);
   const projectileName = spellName(spell, entityLabel(item.entity), lang);
-  const stateChips = depth === 0 && castState ? summaryStateChips(castState, lang) : [];
+  const stateChips = castState ? summaryStateChips(castState, lang) : [];
 
   return (
     <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}`}>
@@ -535,6 +578,7 @@ function SummaryItemCard({
                   data={data}
                   lang={lang}
                   maps={maps}
+                  castState={item.trigger?.state}
                   depth={depth + 1}
                 />
               ))
@@ -926,6 +970,7 @@ function TreeEntryView({
   if (entry.kind === 'sequence') {
     const isExpanded = expanded.has(entry.id);
     const color = sequenceColor(level);
+    const foldedProjectiles = projectileCountOfEntry(entry);
     return (
       <div
         className={`tree-sequence${isExpanded ? ' expanded' : ''}`}
@@ -939,6 +984,11 @@ function TreeEntryView({
           style={{ color }}
         >
           <span className="tree-sequence-count">×{entry.count}</span>
+          {foldedProjectiles > 0 && (
+            <span className="tree-sequence-projectiles">
+              {t(lang, 'tree.projectilesInFold', { n: foldedProjectiles })}
+            </span>
+          )}
           <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
         </button>
         <div className="tree-sequence-body">
@@ -969,6 +1019,7 @@ function TreeEntryView({
   if (entry.repeat > 1) {
     const isExpanded = expanded.has(entry.id);
     const color = sequenceColor(level);
+    const foldedProjectiles = projectileCountOfEntry(entry);
     return (
       <div
         className={`tree-sequence tree-repeat-block${isExpanded ? ' expanded' : ''}`}
@@ -982,6 +1033,11 @@ function TreeEntryView({
           style={{ color }}
         >
           <span className="tree-sequence-count">×{entry.repeat}</span>
+          {foldedProjectiles > 0 && (
+            <span className="tree-sequence-projectiles">
+              {t(lang, 'tree.projectilesInFold', { n: foldedProjectiles })}
+            </span>
+          )}
           <span className="tree-sequence-hint">{isExpanded ? '▾' : '▸'}</span>
         </button>
         <div className="tree-sequence-body">
@@ -1389,12 +1445,16 @@ function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; 
 
 function collectStats(tree: CastTreeNode) {
   let actions = 0;
+  let projectiles = 0;
   const walk = (node: CastTreeNode) => {
-    if (node.kind === 'action') actions += 1;
+    if (node.kind === 'action') {
+      actions += 1;
+      projectiles += node.projectiles.length;
+    }
     node.children.forEach(walk);
   };
   walk(tree);
-  return { actions };
+  return { actions, projectiles };
 }
 
 function buildSlotMap(wandSpells: (string | null)[]): Map<string, number> {
@@ -1556,6 +1616,11 @@ function ShotCard({
             >
               {treeOpen ? '▾' : '▸'} {t(lang, 'result.tree')}
             </button>
+            {stats.projectiles > 0 && (
+              <span className="tree-total">
+                {t(lang, 'tree.totalProjectiles', { n: stats.projectiles })}
+              </span>
+            )}
           </h4>
           {treeOpen &&
             (stats.actions === 0 ? (

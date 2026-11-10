@@ -91,6 +91,28 @@ async function waitFor(expression, timeoutMs, label) {
   }
 }
 
+const APP_BASE = APP_URL.replace(/\?.*$/, '');
+
+/** Load a wand through the share URL (built-in presets have been removed from the app). */
+async function loadWand(spells, opts = {}) {
+  const params = new URLSearchParams({
+    a: String(opts.actionsPerRound ?? 1),
+    l: String(opts.capacity ?? spells.length),
+    r: String(opts.rechargeFrames ?? 40),
+    d: String(opts.castDelayFrames ?? 0),
+    c: String(opts.manaMax ?? 20000),
+    m: String(opts.manaChargeSpeed ?? 2000),
+    q: '0',
+    v: '1',
+    x: '0',
+    s: spells.join(','),
+  });
+  await send('Page.navigate', { url: `${APP_BASE}?${params.toString()}` });
+  await sleep(600);
+  await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'wand page reload');
+  await waitFor("!!document.querySelector('.shot-card')", 60000, 'wand shot after reload');
+}
+
 await send('Page.enable');
 await send('Runtime.enable');
 await send('DOM.enable');
@@ -137,7 +159,14 @@ await waitFor(`document.querySelectorAll('.wand-slot.filled').length === ${fille
 console.log('✓ click-to-add works, filled slots:', await evaluate("document.querySelectorAll('.wand-slot.filled').length"));
 
 // 3b) modifier summary (icons + tooltips) + casting steps; stat-change chips hidden until toggled on
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'double-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await loadWand(['DAMAGE', 'LIGHT_BULLET', 'LIGHT_BULLET'], {
+  actionsPerRound: 2,
+  capacity: 4,
+  castDelayFrames: 20,
+  rechargeFrames: 45,
+  manaMax: 300,
+  manaChargeSpeed: 150,
+});
 await waitFor(
   "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('伤害增强'))",
   60000,
@@ -168,20 +197,25 @@ if ((await evaluate("document.querySelectorAll('.tree-delta').length")) === 0) t
 await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
 console.log('✓ modifier summary icons + tree slot numbers + stat toggle');
 
-// 4) divide-by-10 preset => 800 projectiles
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+// 4) divide-by-10 chain => 800 projectiles
+await loadWand(['DIVIDE_10', 'DIVIDE_10', 'DIVIDE_4', 'DIVIDE_2', 'LIGHT_BULLET'], {
+  capacity: 5,
+  rechargeFrames: 80,
+});
 const huge = await waitFor(
   "document.querySelector('.spell-summary')?.innerText.includes('800 个投射物') && document.querySelector('.spell-summary').innerText",
   60000,
   'divide summary',
 );
 if (!huge.includes('800 个投射物')) throw new Error('expected 800 projectiles, got: ' + huge);
+const treeTotal = await evaluate("document.querySelector('.tree-total')?.innerText || ''");
+if (!treeTotal.includes('800')) throw new Error('tree header should show the projectile total: ' + treeTotal);
 const query = await evaluate('location.search');
 if (!query.includes('DIVIDE_10')) throw new Error('share URL missing DIVIDE_10: ' + query);
 console.log('✓ divide-by-10 chain:', huge.replace(/\n/g, ' | '));
 
 // 4b) wiki example: D10 + DAMAGE + LIGHT_BULLET => 11 damage modifiers, one don't-draw copy
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await loadWand(['DIVIDE_10', 'DAMAGE', 'LIGHT_BULLET'], { capacity: 3 });
 await waitFor(
   "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('伤害增强') && (el.title || '').includes('×11'))",
   60000,
@@ -194,7 +228,7 @@ if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated sibli
 console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽, repeat folding');
 
 // 4c) Tau + divide chain: the first copied divide wipes the deck, the second copies nothing
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'tau-divide-chain'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await loadWand(['TAU', 'DIVIDE_2', 'DIVIDE_4', 'DIVIDE_2', 'LIGHT_BULLET'], { capacity: 5 });
 const tauSummary = await waitFor(
   "[...document.querySelectorAll('.summary-proj')].some((el) => (el.title || '').includes('火花弹') && el.innerText.includes('×32')) && 'tau ok'",
   60000,
@@ -321,10 +355,15 @@ const mobileWand = await evaluate(`(() => {
     viewport: window.innerHeight,
     scrollWidth: slots.scrollWidth,
     clientWidth: slots.clientWidth,
+    scrollHeight: slots.scrollHeight,
+    clientHeight: slots.clientHeight,
+    wrap: getComputedStyle(slots).flexWrap,
   };
 })()`);
 if (mobileWand.height > mobileWand.viewport * 0.6) throw new Error('sticky wand is too tall on mobile: ' + JSON.stringify(mobileWand));
-if (mobileWand.scrollWidth <= mobileWand.clientWidth) throw new Error('wand slots should scroll horizontally instead of wrapping: ' + JSON.stringify(mobileWand));
+if (mobileWand.wrap !== 'wrap') throw new Error('wand slots should wrap instead of horizontal scrolling: ' + JSON.stringify(mobileWand));
+if (mobileWand.scrollWidth > mobileWand.clientWidth + 1) throw new Error('wand slots should not overflow horizontally: ' + JSON.stringify(mobileWand));
+if (mobileWand.scrollHeight <= mobileWand.clientHeight) throw new Error('100 slots should be capped to a scrollable 3-row area: ' + JSON.stringify(mobileWand));
 await evaluate(`(${setNumberInput})(1, 40); true`);
 await waitFor("document.querySelectorAll('.wand-slots .wand-slot').length === 40", 10000, 'capacity back to 40');
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
@@ -381,9 +420,11 @@ const presetOptionsAfterReload = await evaluate("[...document.querySelectorAll('
 if (!presetOptionsAfterReload.some((text) => text.includes('测试预设'))) throw new Error('saved preset did not persist: ' + JSON.stringify(presetOptionsAfterReload));
 console.log('✓ capacity >26, clear keeps stats, named preset saved and persisted');
 
-// restore a wand with spells for the remaining checks
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'trigger-bomb'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
-await waitFor("!!document.querySelector('.shot-card')", 60000, 'wand restored after reload');
+// restore the default wand for the remaining checks
+await send('Page.navigate', { url: APP_BASE });
+await sleep(600);
+await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'default wand reload');
+await waitFor("!!document.querySelector('.shot-card')", 60000, 'default wand shot');
 
 // 5) in-game style tooltip on hover
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="COLOUR_RAINBOW"]'); el.scrollIntoView({ block: 'center' }); return true; })()`);
@@ -427,7 +468,7 @@ console.log('✓ i18n toggle works');
 // reload first so the hover tooltip from step 5 cannot linger in the screenshots
 await send('Page.reload', {});
 await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'reload before screenshots');
-await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten-damage'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
+await loadWand(['DIVIDE_10', 'DAMAGE', 'LIGHT_BULLET'], { capacity: 3 });
 await waitFor(
   "[...document.querySelectorAll('.summary-mod')].some((el) => (el.title || '').includes('伤害增强') && (el.title || '').includes('×11'))",
   60000,

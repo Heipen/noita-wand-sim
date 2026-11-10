@@ -35,16 +35,16 @@ export function createEmptyWand(): WandState {
   };
 }
 
-/** Wand used before the user touches anything: a simple trigger wand from the wiki examples. */
+/** Wand used before the user touches anything. */
 export function createDefaultWand(): WandState {
   const wand = createEmptyWand();
   wand.name = '触发火花弹';
-  wand.capacity = 5;
+  wand.capacity = 26;
   wand.actionsPerRound = 1;
-  wand.rechargeFrames = 29;
-  wand.castDelayFrames = 10;
-  wand.manaMax = 250;
-  wand.manaChargeSpeed = 200;
+  wand.rechargeFrames = 30;
+  wand.castDelayFrames = 30;
+  wand.manaMax = 10000;
+  wand.manaChargeSpeed = 10000;
   wand.spells[0] = 'LIGHT_BULLET_TRIGGER';
   wand.spells[1] = 'BOMB';
   return wand;
