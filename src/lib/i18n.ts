@@ -88,7 +88,7 @@ const zh: Dict = {
   'result.castDelay': '施法延迟',
   'result.recharge': '充能时间',
   'result.projectiles': '投射物',
-  'result.reloaded': '本次触发充能',
+  'result.reloaded': '本次施法触发充能',
   'result.reloadedHint': '本次施法调用了充能（StartReload），结束后需要等待上面的充能时间才能再次施法；不代表当前已经充能完成。',
   'result.tree': '施法树',
   'result.modifiers': '本块修正',
