@@ -1559,22 +1559,50 @@ function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; 
   );
 }
 
-/** Root cast-block actions in execution order, grouped by spell (repeats merged). */
-function groupCastActions(tree: CastTreeNode, upToEvent: number | null): { id: string; count: number }[] {
-  const actions: { id: string; eventIndex?: number }[] = [];
-  const walk = (node: CastTreeNode) => {
-    if (node.kind === 'trigger') return;
-    if (node.kind === 'action') actions.push({ id: node.id, eventIndex: node.eventIndex });
-    node.children.forEach(walk);
-  };
-  walk(tree);
+interface CastBlockGroup {
+  root: boolean;
+  triggerKind?: 'timer' | 'hitWorld' | 'death';
+  projectile?: string | null;
+  actions: { id: string; count: number }[];
+}
 
-  const counts = new Map<string, number>();
-  for (const action of actions) {
-    if (upToEvent !== null && (action.eventIndex === undefined || action.eventIndex > upToEvent)) continue;
-    counts.set(action.id, (counts.get(action.id) ?? 0) + 1);
-  }
-  return [...counts.entries()].map(([id, count]) => ({ id, count }));
+/** Actions of every cast block (root + trigger payloads) in execution order, repeats merged. */
+function groupCastBlocks(tree: CastTreeNode, upToEvent: number | null): CastBlockGroup[] {
+  const payloadBlocks: CastBlockGroup[] = [];
+  const rootActions: { id: string; eventIndex?: number }[] = [];
+
+  const merge = (actions: { id: string }[]): { id: string; count: number }[] => {
+    const counts = new Map<string, number>();
+    for (const action of actions) counts.set(action.id, (counts.get(action.id) ?? 0) + 1);
+    return [...counts.entries()].map(([id, count]) => ({ id, count }));
+  };
+
+  const collect = (node: CastTreeNode, actions: { id: string; eventIndex?: number }[]) => {
+    if (node.kind === 'trigger') {
+      const payload: { id: string; eventIndex?: number }[] = [];
+      node.children.forEach((child) => collect(child, payload));
+      const grouped = merge(payload);
+      if (grouped.length > 0) {
+        payloadBlocks.push({
+          root: false,
+          triggerKind: node.triggerKind,
+          projectile: node.projectile,
+          actions: grouped,
+        });
+      }
+      return;
+    }
+    if (node.kind === 'action') {
+      if (upToEvent === null || (node.eventIndex !== undefined && node.eventIndex <= upToEvent)) {
+        actions.push({ id: node.id, eventIndex: node.eventIndex });
+      }
+    }
+    node.children.forEach((child) => collect(child, actions));
+  };
+
+  tree.children.forEach((child) => collect(child, rootActions));
+  const root = merge(rootActions);
+  return [...(root.length > 0 ? [{ root: true, actions: root }] : []), ...payloadBlocks];
 }
 
 function collectStats(tree: CastTreeNode) {  let actions = 0;
@@ -1660,7 +1688,7 @@ function ShotCard({
     return found;
   }, [selectedEvent, shot.pileSteps]);
   const castBlockGroups = useMemo(
-    () => groupCastActions(shot.tree, selectedEvent),
+    () => groupCastBlocks(shot.tree, selectedEvent),
     [shot.tree, selectedEvent],
   );
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
@@ -1827,24 +1855,40 @@ function ShotCard({
                 <span>{t(lang, 'result.castBlock')}</span>
                 <span className="muted small">
                   {t(lang, 'result.castBlockCount', {
-                    actions: castBlockGroups.reduce((sum, group) => sum + group.count, 0),
-                    kinds: castBlockGroups.length,
+                    actions: castBlockGroups.reduce(
+                      (sum, block) => sum + block.actions.reduce((blockSum, group) => blockSum + group.count, 0),
+                      0,
+                    ),
+                    kinds: new Set(castBlockGroups.flatMap((block) => block.actions.map((group) => group.id))).size,
                   })}
                 </span>
               </div>
-              <div className="cast-block-chips">
-                {castBlockGroups.map(({ id, count }) => {
-                  const spell = maps.byId.get(id);
-                  const name = spellName(spell, id, lang);
-                  return (
-                    <span className="cast-block-chip" title={`${name} ×${count}`} key={id}>
-                      <SpellIcon spell={spell} data={data} />
-                      <span>{name}</span>
-                      {count > 1 && <b>×{count}</b>}
-                    </span>
-                  );
-                })}
-              </div>
+              {castBlockGroups.map((block, blockIndex) => (
+                <div className="cast-block-group" key={`${block.root ? 'root' : block.projectile ?? 'payload'}-${blockIndex}`}>
+                  <div className="cast-block-label">
+                    {block.root ? t(lang, 'result.castBlockRoot') : t(lang, 'result.castBlockPayload')}
+                    {!block.root && block.projectile && (
+                      <span className="muted">
+                        {' '}
+                        · {spellName(maps.byEntity.get(block.projectile), entityLabel(block.projectile), lang)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="cast-block-chips">
+                    {block.actions.map(({ id, count }) => {
+                      const spell = maps.byId.get(id);
+                      const name = spellName(spell, id, lang);
+                      return (
+                        <span className="cast-block-chip" title={`${name} ×${count}`} key={id}>
+                          <SpellIcon spell={spell} data={data} />
+                          <span>{name}</span>
+                          {count > 1 && <b>×{count}</b>}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
           <div className="piles-grid">

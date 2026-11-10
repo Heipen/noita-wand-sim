@@ -167,6 +167,13 @@ for (const needle of ['抽到并执行「触发火花弹」', '开启命中触�
 }
 if (treeText.includes('生成投射物')) throw new Error('tree should not have a separate projectile line: ' + treeText);
 
+// trigger payload actions are shown as their own cast block in the action summary
+await loadWand(['LIGHT_BULLET_TRIGGER', 'BOUNCE', 'AIR_BULLET', 'LIGHT_BULLET'], { actionsPerRound: 4, capacity: 26 });
+await waitFor("document.querySelector('.cast-block-preview')?.innerText.includes('强气流')", 60000, 'trigger payload cast block');
+const payloadBlockText = await evaluate("document.querySelector('.cast-block-preview')?.innerText || ''");
+if (!payloadBlockText.includes('触发载荷')) throw new Error('payload block label missing: ' + payloadBlockText);
+console.log('✓ trigger payload cast block shown in action summary');
+
 // Always Cast is opt-in: hidden and ignored by default, shown after enabling the toggle.
 if (await evaluate("!!document.querySelector('.always-cast')")) {
   throw new Error('always cast should be hidden by default');

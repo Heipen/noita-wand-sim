@@ -1050,6 +1050,16 @@ main {
   gap: 4px;
 }
 
+.cast-block-group + .cast-block-group {
+  margin-top: 7px;
+}
+
+.cast-block-label {
+  margin-bottom: 3px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
 .cast-block-chip {
   display: inline-flex;
   align-items: center;
