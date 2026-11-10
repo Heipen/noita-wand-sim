@@ -765,6 +765,8 @@ function TreeEntryView({
 
 const INDENT = 14;
 const NO_EXPAND: Set<string> = new Set();
+/** 施法过程暂时注释停用；保留实现，需要恢复时改成 true。 */
+const SHOW_CASTING_STEPS = false;
 const SEQUENCE_COLORS = ['#8fe0b8', '#8fb8e0', '#e8a87c', '#c9a0ff', '#ffd479', '#7fd1c7'];
 
 function sequenceColor(level: number): string {
@@ -1199,11 +1201,13 @@ function ShotCard({
   }, []);
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
   const grouped = useMemo(() => groupTree(shot.tree, foldRepeats), [shot.tree, foldRepeats]);
-  // The narrative is built from the *unfolded* tree, then repeated multi-line runs are
-  // folded by the story itself (so 'A B C A B C' becomes one clickable "{ ... } ×2").
-  const storyTree = useMemo(() => groupTree(shot.tree, false), [shot.tree]);
+  // 施法过程暂时停用：保留全部实现，需要恢复时把 SHOW_CASTING_STEPS 改成 true。
+  const storyTree = useMemo(
+    () => (SHOW_CASTING_STEPS ? groupTree(shot.tree, false) : null),
+    [shot.tree],
+  );
   const rawStory = useMemo(
-    () => buildStory(storyTree, lang, maps, showDeltas, slotMap, NO_EXPAND),
+    () => (storyTree ? buildStory(storyTree, lang, maps, showDeltas, slotMap, NO_EXPAND) : []),
     [storyTree, lang, maps, showDeltas, slotMap],
   );
   const story = useMemo(
@@ -1352,19 +1356,22 @@ function ShotCard({
         </section>
       </div>
 
-      <section className="shot-steps">
-        <h4 className="tree-heading">
-          <button
-            type="button"
-            className="section-toggle"
-            aria-expanded={stepsOpen}
-            onClick={() => setStepsOpen((open) => !open)}
-          >
-            {stepsOpen ? '▾' : '▸'} {t(lang, 'result.steps')}
-          </button>
-        </h4>
-        {stepsOpen && <ol className="step-list">{renderStorySteps(story)}</ol>}
-      </section>
+      {/* 施法过程暂时停用（保留实现）：恢复时把 SHOW_CASTING_STEPS 改成 true */}
+      {SHOW_CASTING_STEPS && (
+        <section className="shot-steps">
+          <h4 className="tree-heading">
+            <button
+              type="button"
+              className="section-toggle"
+              aria-expanded={stepsOpen}
+              onClick={() => setStepsOpen((open) => !open)}
+            >
+              {stepsOpen ? '▾' : '▸'} {t(lang, 'result.steps')}
+            </button>
+          </h4>
+          {stepsOpen && <ol className="step-list">{renderStorySteps(story)}</ol>}
+        </section>
+      )}
 
       <details className="shot-details">
         <summary>{t(lang, 'result.rawEvents')}</summary>

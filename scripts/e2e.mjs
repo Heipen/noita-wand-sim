@@ -127,12 +127,6 @@ for (const needle of ['抽到并执行「触发火花弹」', '开启命中触�
   if (!treeText.includes(needle)) throw new Error(`cast tree missing ${needle}: ${treeText}`);
 }
 if (treeText.includes('生成投射物')) throw new Error('tree should not have a separate projectile line: ' + treeText);
-// casting steps are collapsed by default; open them for the rest of the checks
-if ((await evaluate("document.querySelectorAll('.step-list').length")) !== 0) throw new Error('casting steps should be collapsed by default');
-await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
-await waitFor("document.querySelectorAll('.step-list').length > 0", 10000, 'casting steps opened');
-const firstStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
-if (!firstStory.includes('生成投射物')) throw new Error('story should mention the spawned projectile: ' + firstStory);
 
 // 3) click a spell to fill the next empty slot
 const filledBefore = await evaluate("document.querySelectorAll('.wand-slot.filled').length");
@@ -150,20 +144,18 @@ await waitFor(
 const summaryTitles = await evaluate(
   "({ proj: document.querySelector('.summary-proj')?.title || '', mods: [...document.querySelectorAll('.summary-mod')].map((el) => el.title) })",
 );
-if (!summaryTitles.proj.includes('火花弹')) throw new Error('summary projectile tooltip missing name: ' + JSON.stringify(summaryTitles));
+if (summaryTitles.proj.includes('火花弹') === false) throw new Error('summary projectile tooltip missing name: ' + JSON.stringify(summaryTitles));
 if (!summaryTitles.mods.some((title) => title.includes('伤害增强') && title.includes('×1')))
   throw new Error('summary modifier tooltip missing name/count: ' + JSON.stringify(summaryTitles));
-const stepsText = await evaluate("document.querySelector('.step-list')?.innerText || ''");
-if (!stepsText.includes('抽取')) throw new Error('missing human steps: ' + stepsText);
-if (!stepsText.includes('抽到并执行「伤害增强」')) throw new Error('missing action explanation: ' + stepsText);
-if (!stepsText.includes('#')) throw new Error('steps should label wand slots: ' + stepsText);
-if (stepsText.includes('投射物伤害')) throw new Error('stat changes should be hidden by default: ' + stepsText);
+const treeSlots = await evaluate("document.querySelectorAll('.tree-slot').length");
+if (treeSlots === 0) throw new Error('tree should label spells with wand slot numbers');
+const treeDeltasBefore = await evaluate("document.querySelectorAll('.tree-delta').length");
+if (treeDeltasBefore !== 0) throw new Error('stat changes should be hidden by default in the tree');
 await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
 await sleep(300);
-const stepsWithDeltas = await evaluate("document.querySelector('.step-list')?.innerText || ''");
-if (!stepsWithDeltas.includes('投射物伤害')) throw new Error('toggle should reveal modifier deltas: ' + stepsWithDeltas);
+if ((await evaluate("document.querySelectorAll('.tree-delta').length")) === 0) throw new Error('toggle should reveal stat deltas in the tree');
 await evaluate("document.querySelector('input[data-toggle=deltas]').click(); true");
-console.log('✓ modifier summary icons + steps numbering/dont-draw + stat toggle');
+console.log('✓ modifier summary icons + tree slot numbers + stat toggle');
 
 // 4) divide-by-10 preset => 800 projectiles
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'divide-ten'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -186,24 +178,9 @@ await waitFor(
 );
 const wikiTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
 if (!wikiTree.includes('禁抽')) throw new Error('tree missing the don\'t-draw copy: ' + wikiTree.slice(0, 400));
-const wikiStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
-if (!wikiStory.includes('牌库已空')) throw new Error('story missing empty-deck draws: ' + wikiStory.slice(0, 400));
-if (!wikiStory.includes('禁抽')) throw new Error('story missing the don\'t-draw explanation: ' + wikiStory.slice(0, 400));
-if (!wikiStory.includes('弃掉')) throw new Error('story missing discard steps: ' + wikiStory.slice(0, 400));
 const repeatBadge = await evaluate("(document.querySelector('.tree-repeat')?.innerText || '')");
 if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated siblings, got badge: ' + repeatBadge);
-const storyRepeatCount = await evaluate("document.querySelector('.step-sequence .step-seq-head')?.innerText || ''");
-if (!storyRepeatCount.includes('×8')) throw new Error('story should fold repeated runs: ' + JSON.stringify(storyRepeatCount));
-const storySequences = await evaluate("document.querySelectorAll('.step-sequence').length");
-if (storySequences === 0) throw new Error('story should fold repeated multi-line runs with braces');
-const stepsBeforeExpand = await evaluate("document.querySelectorAll('.step-list li').length");
-await evaluate("document.querySelector('.step-sequence .step-seq-head').click(); true");
-await sleep(300);
-const stepsAfterExpand = await evaluate("document.querySelectorAll('.step-list li').length");
-if (stepsAfterExpand <= stepsBeforeExpand) throw new Error('clicking the story repeat count should expand it');
-await evaluate("document.querySelector('.step-sequence .step-seq-head').click(); true");
-await sleep(200);
-console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽 explanation, discards, multi-line story folding');
+console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽, repeat folding');
 
 // 4c) Tau + divide chain: the first copied divide wipes the deck, the second copies nothing
 await evaluate(`(() => { const s = document.querySelector('.preset-select'); s.value = 'tau-divide-chain'; s.dispatchEvent(new Event('change', { bubbles: true })); return true; })()`);
@@ -215,10 +192,6 @@ const tauSummary = await waitFor(
 if (tauSummary !== 'tau ok') throw new Error('tau chain should make 32 spark bolts');
 const tauTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
 if (!tauTree.includes('未复制任何法术')) throw new Error('tree should mark the empty copied divide: ' + tauTree.slice(0, 600));
-const tauStory = await evaluate("document.querySelector('.step-list')?.innerText || ''");
-if (!tauStory.includes('没有可复制')) throw new Error('story should explain the empty copy: ' + tauStory.slice(0, 600));
-if (!tauStory.includes('弃掉')) throw new Error('tau story missing divide discards: ' + tauStory.slice(0, 600));
-if (!tauStory.includes('从牌库顶依次弃掉 4 张牌')) throw new Error('story should group the divide discard loop: ' + tauStory.slice(-700));
 const tauPiles = await evaluate("document.querySelector('.piles')?.innerText || ''");
 if (!tauPiles.includes('本次施法弃牌') || !tauPiles.includes('充能后会回到牌库')) {
   throw new Error('piles should list the cards discarded during the cast: ' + tauPiles);
@@ -278,18 +251,9 @@ await evaluate("document.querySelector('.tree-repeat').click(); true");
 await sleep(250);
 const repeatCollapsed = await evaluate("document.querySelectorAll('.tree-action').length");
 if (repeatCollapsed !== repeatBefore) throw new Error('clicking ×N again should collapse it');
-const storyRepeatButtons = await evaluate(
-  "document.querySelectorAll('.step-repeat-toggle, .step-seq-head').length",
-);
-if (storyRepeatButtons === 0) throw new Error('story repeat lines should be clickable');
-console.log('✓ repeat counts expand and collapse groups in tree and story');
+console.log('✓ repeat counts expand and collapse groups in the tree');
 
-// 4d) casting steps collapse, compact picker without inner scroll, sticky spell bar
-await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
-await sleep(200);
-if ((await evaluate("document.querySelectorAll('.step-list').length")) !== 0) throw new Error('steps should collapse entirely');
-await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
-await sleep(200);
+// 4d) compact picker without inner scroll, sticky spell bar
 const layoutInfo = await evaluate(`(() => {
   const grid = document.querySelector('.picker-grid');
   const stickyBar = document.querySelector('.wand-sticky');
@@ -313,7 +277,7 @@ if (layoutInfo.compactBadges !== 0) throw new Error('compact spell cards should 
 if (layoutInfo.slotNumbers === 0) throw new Error('wand slots should be numbered');
 if (layoutInfo.summaryZones === 0) throw new Error('summary should separate projectile/modifier zones');
 if (layoutInfo.pileTexts !== 0) throw new Error('pile chips should be icons only');
-console.log('✓ steps collapse, compact picker, sticky spell bar, icon piles, summary zones');
+console.log('✓ compact picker, sticky spell bar, icon piles, summary zones');
 
 // 4e) capacity above 26, clearing keeps wand stats, saving a named preset
 const setNumberInput = `(index, value) => {
@@ -437,20 +401,6 @@ await sleep(400);
 const screenshot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(SHOT, Buffer.from(screenshot.data, 'base64'));
 console.log('✓ screenshot:', SHOT);
-
-await evaluate("document.querySelectorAll('.section-toggle')[1].click(); true");
-await waitFor("document.querySelectorAll('.step-list').length > 0", 10000, 'steps open for screenshot');
-await evaluate(`(() => {
-  document.querySelector('.shot-steps').scrollIntoView({ block: 'start' });
-  const sticky = document.querySelector('.wand-sticky');
-  window.scrollBy(0, -((sticky?.offsetHeight || 0) + 16));
-  return true;
-})()`);
-await sleep(400);
-const stepsShot = await send('Page.captureScreenshot', { format: 'png' });
-const stepsPath = SHOT.replace(/\.png$/, '-steps.png');
-writeFileSync(stepsPath, Buffer.from(stepsShot.data, 'base64'));
-console.log('✓ screenshot (narrative):', stepsPath);
 
 if (consoleErrors.length > 0) console.warn('browser errors:', consoleErrors.slice(0, 10));
 else console.log('✓ no browser console errors');
