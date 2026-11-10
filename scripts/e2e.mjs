@@ -296,6 +296,18 @@ await waitFor(
 );
 console.log('✓ visual effects excluded; drawing utility spells listed as modifiers');
 
+await loadWand(['BLOOD_TO_POWER', 'LIGHT_BULLET']);
+await waitFor(
+  "[...document.querySelectorAll('.summary-mod-note')].some((el) => el.innerText.includes('44%'))",
+  60000,
+  'blood to power formula note',
+);
+const bloodChips = await evaluate("[...document.querySelectorAll('.summary-state-chip')].map((el) => el.innerText)");
+if (bloodChips.some((text) => text.includes('投射物伤害 +44'))) {
+  throw new Error('Blood to Power should not show a fake fixed +44 damage: ' + JSON.stringify(bloodChips));
+}
+console.log('✓ Blood/Gold to Power use formula notes instead of fixed player stats');
+
 // 4) divide-by-10 chain => 800 projectiles
 await loadWand(['DIVIDE_10', 'DIVIDE_10', 'DIVIDE_4', 'DIVIDE_2', 'LIGHT_BULLET'], {
   capacity: 5,
@@ -311,6 +323,11 @@ const treeTotal = await evaluate("document.querySelector('.tree-total')?.innerTe
 if (!treeTotal.includes('800')) throw new Error('tree header should show the projectile total: ' + treeTotal);
 const query = await evaluate('location.search');
 if (!query.includes('DIVIDE_10')) throw new Error('share URL missing DIVIDE_10: ' + query);
+await waitFor(
+  "[...document.querySelectorAll('.summary-mod-note')].some((el) => el.innerText.includes('伤害'))",
+  10000,
+  'divide modifier note',
+);
 console.log('✓ divide-by-10 chain:', huge.replace(/\n/g, ' | '));
 
 // 4b) wiki example: D10 + DAMAGE + LIGHT_BULLET => 11 damage modifiers, one don't-draw copy
@@ -481,7 +498,12 @@ const clearedDraft = await evaluate(`(() => {
   return input.value;
 })()`);
 if (clearedDraft !== '') throw new Error('number input should allow an empty draft while focused');
-await evaluate("document.querySelectorAll('.wand-stats input[type=number]')[1].blur(); true");
+await evaluate(`(() => {
+  const input = document.querySelectorAll('.wand-stats input[type=number]')[1];
+  input.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  input.blur();
+  return true;
+})()`);
 await sleep(200);
 const restoredDraft = await evaluate("document.querySelectorAll('.wand-stats input[type=number]')[1].value");
 if (restoredDraft !== '40') throw new Error('empty draft should be restored/clamped on blur, got: ' + restoredDraft);

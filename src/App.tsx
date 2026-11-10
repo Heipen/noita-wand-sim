@@ -121,8 +121,6 @@ export default function App() {
   const [data, setData] = useState<GameData | null>(null);
   const [bundled, setBundled] = useState<GameData | null>(null);
   const [wand, setWand] = useState<WandState>(readInitialWand);
-  const [playerHp, setPlayerHp] = useState(100);
-  const [playerMoney, setPlayerMoney] = useState(0);
   const [spellTarget, setSpellTarget] = useState<SpellTarget | null>(null);
   const [isMobile] = useState(
     () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent),
@@ -253,7 +251,6 @@ export default function App() {
         mana: wand.manaMax,
         frame: 0,
         worldSeed: 0,
-        player: { hp: playerHp, money: playerMoney },
       })
         .then((simulation) => {
           if (!cancelled) setResult(simulation);
@@ -269,7 +266,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [phase, data, wand, mode, playerHp, playerMoney]);
+  }, [phase, data, wand, mode]);
 
   // Keep the URL shareable at all times.
   useEffect(() => {
@@ -450,10 +447,6 @@ export default function App() {
                 onSavePreset={savePreset}
                 onDeletePreset={deletePreset}
                 copied={copied}
-                playerHp={playerHp}
-                playerMoney={playerMoney}
-                onPlayerHpChange={setPlayerHp}
-                onPlayerMoneyChange={setPlayerMoney}
                 isMobile={isMobile}
                 spellTarget={spellTarget}
                 onSlotTarget={isMobile ? chooseSpellTarget : undefined}

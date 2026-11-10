@@ -40,10 +40,6 @@ interface Props {
   onSavePreset: (name: string, wand: WandState) => void;
   onDeletePreset: (id: string) => void;
   copied: boolean;
-  playerHp: number;
-  playerMoney: number;
-  onPlayerHpChange: (value: number) => void;
-  onPlayerMoneyChange: (value: number) => void;
   isMobile: boolean;
   spellTarget?: SpellTarget | null;
   onSlotTarget?: (kind: SpellTarget['kind'], index: number) => void;
@@ -125,10 +121,6 @@ export function WandEditor({
   onSavePreset,
   onDeletePreset,
   copied,
-  playerHp,
-  playerMoney,
-  onPlayerHpChange,
-  onPlayerMoneyChange,
   isMobile,
   spellTarget = null,
   onSlotTarget,
@@ -377,22 +369,6 @@ export function WandEditor({
             max={100000}
             step={10}
             onChange={(value) => update({ manaChargeSpeed: value })}
-          />
-          <NumberField
-            label={t(lang, 'editor.playerHp')}
-            value={playerHp}
-            min={1}
-            max={1000000}
-            step={10}
-            onChange={onPlayerHpChange}
-          />
-          <NumberField
-            label={t(lang, 'editor.playerMoney')}
-            value={playerMoney}
-            min={0}
-            max={100000000}
-            step={100}
-            onChange={onPlayerMoneyChange}
           />
           <label className="field checkbox-field">
             <input

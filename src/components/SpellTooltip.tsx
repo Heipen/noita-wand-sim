@@ -67,7 +67,7 @@ async function loadProjectileStats(data: GameData, spell: SpellMeta): Promise<Pr
   return stats;
 }
 
-const EFFECT_FIELDS: { key: string; label: string; kind: 'damage' | 'percent' | 'degrees' | 'multiplier' | 'number' }[] = [
+const EFFECT_FIELDS: { key: string; label: string; kind: 'damage' | 'percent' | 'degrees' | 'multiplier' | 'number' | 'seconds' }[] = [
   { key: 'damage_projectile_add', label: 'effect.damageProjectile', kind: 'damage' },
   { key: 'damage_explosion_add', label: 'effect.damageExplosion', kind: 'damage' },
   { key: 'damage_critical_chance', label: 'effect.critChance', kind: 'percent' },
@@ -76,6 +76,8 @@ const EFFECT_FIELDS: { key: string; label: string; kind: 'damage' | 'percent' | 
   { key: 'lifetime_add', label: 'effect.lifetime', kind: 'number' },
   { key: 'bounces', label: 'effect.bounces', kind: 'number' },
   { key: 'explosion_radius', label: 'effect.explosionRadius', kind: 'number' },
+  { key: 'fire_rate_wait', label: 'effect.castDelay', kind: 'seconds' },
+  { key: 'reload_time', label: 'effect.recharge', kind: 'seconds' },
   { key: 'action_draw_many_count', label: 'effect.draw', kind: 'number' },
 ];
 
@@ -89,6 +91,8 @@ function effectValue(kind: (typeof EFFECT_FIELDS)[number]['kind'], raw: number):
       return `${raw > 0 ? '+' : ''}${formatNumber(raw)}°`;
     case 'multiplier':
       return `${raw > 0 ? '+' : ''}${formatNumber(raw)}×`;
+    case 'seconds':
+      return `${raw > 0 ? '+' : ''}${formatFramesAsSeconds(raw)}s`;
     default:
       return `${raw > 0 ? '+' : ''}${formatNumber(raw)}`;
   }

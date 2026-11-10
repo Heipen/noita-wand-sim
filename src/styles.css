@@ -1905,6 +1905,18 @@ main {
   white-space: nowrap;
 }
 
+.summary-mod-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.summary-mod-note {
+  font-size: 10px;
+  color: #d7c28a;
+}
+
 .summary-effects-label {
   font-size: 10px;
   color: var(--muted);

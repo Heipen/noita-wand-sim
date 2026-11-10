@@ -341,7 +341,8 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
         // apply their shot-state changes to that projectile just like modifiers
         const castsIntoNext =
           spell?.type === 'modifier' ||
-          (spell?.type === 'utility' && node.children.some((child) => child.kind === 'drawBlock'));
+          (spell?.type === 'utility' && node.children.some((child) => child.kind === 'drawBlock')) ||
+          /^DIVIDE_\d+$/.test(node.id);
         if (castsIntoNext) {
           modifierCounts.set(node.id, (modifierCounts.get(node.id) ?? 0) + 1);
         }
@@ -524,6 +525,42 @@ function summaryStateChips(
   });
 }
 
+/** Blood/Gold to Power add damage from values the simulator cannot know; show a formula
+ *  note instead of pretending it is a fixed number. */
+function collectPowerFormulaDamage(tree: CastTreeNode): number {
+  let total = 0;
+  const walk = (node: CastTreeNode) => {
+    if (node.kind === 'trigger') return;
+    if (
+      node.kind === 'action' &&
+      (node.id === 'BLOOD_TO_POWER' || node.id === 'MONEY_MAGIC')
+    ) {
+      total += node.delta?.damage_projectile_add ?? 0;
+    }
+    node.children.forEach(walk);
+  };
+  walk(tree);
+  return total;
+}
+
+function signedNumber(value: number): string {
+  return value > 0 ? `+${formatNumber(value)}` : formatNumber(value);
+}
+
+function modifierNote(id: string, spell: SpellMeta | undefined, lang: Lang): string | null {
+  if (id === 'BLOOD_TO_POWER') return t(lang, 'summary.bloodToPower');
+  if (id === 'MONEY_MAGIC') return t(lang, 'summary.moneyMagic');
+  if (!spell || !/^DIVIDE_\d+$/.test(id)) return null;
+  const damage = Number(spell.stateDelta.damage_projectile_add ?? 0) * DAMAGE_DISPLAY_SCALE;
+  const cast = Number(spell.stateDelta.fire_rate_wait ?? 0) / 60;
+  const recharge = Number(spell.stateDelta.reload_time ?? 0) / 60;
+  return t(lang, 'summary.divideEffect', {
+    damage: signedNumber(damage),
+    cast: `${signedNumber(cast)}s`,
+    recharge: `${signedNumber(recharge)}s`,
+  });
+}
+
 function SummaryItemCard({
   item,
   data,
@@ -542,6 +579,13 @@ function SummaryItemCard({
   const spell = maps.byEntity.get(item.entity);
   const projectileName = spellName(spell, entityLabel(item.entity), lang);
   const stateChips = castState ? summaryStateChips(castState, lang) : [];
+  const modifierNotes = [
+    ...new Set(
+      item.modifiers
+        .map(([id]) => modifierNote(id, maps.byId.get(id), lang))
+        .filter((note): note is string => note !== null),
+    ),
+  ];
 
   return (
     <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}`}>
@@ -568,6 +612,15 @@ function SummaryItemCard({
                 );
               })}
             </span>
+            {modifierNotes.length > 0 && (
+              <div className="summary-mod-notes">
+                {modifierNotes.map((note) => (
+                  <span className="summary-mod-note" key={note}>
+                    {note}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -634,7 +687,13 @@ function SpellSummary({
       cessations: collectCessationEffects(tree),
     };
   }, [tree, maps]);
-  const stateChips = summaryStateChips(castState, lang);
+  const formulaDamage = collectPowerFormulaDamage(tree);
+  const baseDamage = typeof castState.damage_projectile_add === 'number' ? castState.damage_projectile_add : 0;
+  const displayCastState =
+    formulaDamage !== 0
+      ? { ...castState, damage_projectile_add: baseDamage - formulaDamage }
+      : castState;
+  const stateChips = summaryStateChips(displayCastState, lang);
   const generalStateChips =
     summary.cessations.length > 0
       ? stateChips.filter((chip) => chip.key !== 'lifetime_add')
@@ -657,7 +716,7 @@ function SpellSummary({
                   data={data}
                   lang={lang}
                   maps={maps}
-                  castState={castState}
+                  castState={displayCastState}
                 />
               ))}
             </div>
