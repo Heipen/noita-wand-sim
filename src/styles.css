@@ -971,9 +971,23 @@ main {
 }
 
 .shot-columns {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  align-items: start;
+  gap: 16px;
+}
+
+.shot-tree {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.piles {
+  position: sticky;
+  top: 12px;
+  max-height: min(70vh, 720px);
+  overflow: auto;
 }
 
 .piles-grid {
@@ -1977,14 +1991,33 @@ main {
   .piles-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .shot-columns {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .piles {
+    order: -1;
+    position: static;
+    max-height: 42vh;
+    overflow: auto;
+  }
+
+  .shot-tree {
+    max-height: 48vh;
+    overflow: auto;
+  }
+
+  .shot-columns .piles-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
 }
 
 @media (max-width: 860px) {
   .sim-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .shot-columns {
     grid-template-columns: minmax(0, 1fr);
   }
 }
