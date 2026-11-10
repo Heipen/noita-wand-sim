@@ -413,21 +413,68 @@ function CessationLifetimeBadge({
   );
 }
 
+const SUMMARY_STATE_ROWS: {
+  key: string;
+  format: 'seconds' | 'percent' | 'multiplier' | 'degrees' | 'number';
+}[] = [
+  { key: 'damage_projectile_add', format: 'number' },
+  { key: 'damage_explosion_add', format: 'number' },
+  { key: 'damage_critical_chance', format: 'percent' },
+  { key: 'spread_degrees', format: 'degrees' },
+  { key: 'speed_multiplier', format: 'multiplier' },
+  { key: 'lifetime_add', format: 'number' },
+  { key: 'bounces', format: 'number' },
+  { key: 'explosion_radius', format: 'number' },
+];
+
+function stateValue(
+  format: (typeof SUMMARY_STATE_ROWS)[number]['format'],
+  value: number,
+  signed = false,
+): string {
+  if (format === 'seconds') return formatFramesAsSeconds(value);
+  const text = formatNumber(value);
+  return signed && value > 0 ? `+${text}` : text;
+}
+
+function summaryStateChips(
+  castState: Record<string, number | string>,
+  lang: Lang,
+): { key: string; text: string }[] {
+  return SUMMARY_STATE_ROWS.flatMap((row) => {
+    const value = castState[row.key];
+    if (typeof value !== 'number' || value === 0) return [];
+    // 1.0 is the neutral speed multiplier, not an actual modifier
+    if (row.key === 'speed_multiplier' && value === 1) return [];
+    return [
+      {
+        key: row.key,
+        text: t(lang, `state.${row.key}`, {
+          value: stateValue(row.format, value, row.format !== 'multiplier'),
+        }),
+      },
+    ];
+  });
+}
+
 function SummaryItemCard({
   item,
   data,
   lang,
   maps,
+  castState,
   depth = 0,
 }: {
   item: SummaryItem;
   data: GameData;
   lang: Lang;
   maps: SpellMaps;
+  castState?: Record<string, number | string>;
   depth?: number;
 }) {
   const spell = maps.byEntity.get(item.entity);
   const projectileName = spellName(spell, entityLabel(item.entity), lang);
+  const stateChips = depth === 0 && castState ? summaryStateChips(castState, lang) : [];
 
   return (
     <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}`}>
@@ -457,6 +504,15 @@ function SummaryItemCard({
           </div>
         )}
       </div>
+      {stateChips.length > 0 && (
+        <div className="summary-state-chips">
+          {stateChips.map((chip) => (
+            <span className="summary-state-chip" key={chip.key}>
+              {chip.text}
+            </span>
+          ))}
+        </div>
+      )}
       {item.trigger && (
         <div className="summary-trigger">
           <div className="summary-trigger-head">
@@ -492,11 +548,13 @@ function SpellSummary({
   data,
   lang,
   maps,
+  castState,
 }: {
   tree: CastTreeNode;
   data: GameData;
   lang: Lang;
   maps: SpellMaps;
+  castState: Record<string, number | string>;
 }) {
   const summary = useMemo(() => {
     const items = summarizeNodes(tree.children, maps);
@@ -508,17 +566,31 @@ function SpellSummary({
       cessations: collectCessationEffects(tree),
     };
   }, [tree, maps]);
+  const stateChips = summaryStateChips(castState, lang);
+  const generalStateChips =
+    summary.cessations.length > 0
+      ? stateChips.filter((chip) => chip.key !== 'lifetime_add')
+      : stateChips;
   return (
     <section className="spell-summary">
       <h4>{t(lang, 'result.summary')}</h4>
-      {summary.items.length === 0 && summary.cessations.length === 0 ? (
+      {summary.items.length === 0 &&
+      summary.cessations.length === 0 &&
+      generalStateChips.length === 0 ? (
         <p className="muted small">{t(lang, 'summary.none')}</p>
       ) : (
         <>
           {summary.items.length > 0 && (
             <div className="summary-grid">
               {summary.items.map((item, index) => (
-                <SummaryItemCard key={index} item={item} data={data} lang={lang} maps={maps} />
+                <SummaryItemCard
+                  key={index}
+                  item={item}
+                  data={data}
+                  lang={lang}
+                  maps={maps}
+                  castState={castState}
+                />
               ))}
             </div>
           )}
@@ -555,6 +627,18 @@ function SpellSummary({
                   {effect.count > 1 && <span className="summary-effect-count">×{effect.count}</span>}
                 </span>
               ))}
+            </div>
+          )}
+          {summary.items.length === 0 && generalStateChips.length > 0 && (
+            <div className="summary-state-card">
+              <span className="summary-state-label">{t(lang, 'summary.state')}</span>
+              <div className="summary-state-chips">
+                {generalStateChips.map((chip) => (
+                  <span className="summary-state-chip" key={chip.key}>
+                    {chip.text}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </>
@@ -1277,32 +1361,6 @@ function buildStory(
 
 // --- shot card -----------------------------------------------------------------
 
-const STATE_ROWS: { key: string; format: 'seconds' | 'percent' | 'multiplier' | 'degrees' | 'number' }[] = [
-  { key: 'fire_rate_wait', format: 'seconds' },
-  { key: 'reload_time', format: 'seconds' },
-  { key: 'damage_projectile_add', format: 'number' },
-  { key: 'damage_explosion_add', format: 'number' },
-  { key: 'damage_critical_chance', format: 'percent' },
-  { key: 'spread_degrees', format: 'degrees' },
-  { key: 'speed_multiplier', format: 'multiplier' },
-  { key: 'lifetime_add', format: 'number' },
-  { key: 'bounces', format: 'number' },
-  { key: 'explosion_radius', format: 'number' },
-];
-
-function stateValue(format: (typeof STATE_ROWS)[number]['format'], value: number): string {
-  switch (format) {
-    case 'seconds':
-      return formatFramesAsSeconds(value);
-    case 'percent':
-    case 'degrees':
-    case 'multiplier':
-      return formatNumber(value);
-    default:
-      return formatNumber(value);
-  }
-}
-
 function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; data: GameData; lang: Lang; maps: SpellMaps }) {
   return (
     <div className="pile">
@@ -1391,11 +1449,6 @@ function ShotCard({
     () => (foldRepeats ? foldStorySteps(rawStory, lang) : rawStory),
     [rawStory, lang, foldRepeats],
   );
-  const stateRows = STATE_ROWS.map((row) => {
-    const value = shot.castState[row.key];
-    return typeof value === 'number' && value !== 0 ? { ...row, value } : null;
-  }).filter((row): row is NonNullable<typeof row> => row !== null);
-
   const castDiscards = useMemo(
     () =>
       shot.events.flatMap((event) =>
@@ -1486,7 +1539,7 @@ function ShotCard({
         )}
       </header>
 
-      <SpellSummary tree={shot.tree} data={data} lang={lang} maps={maps} />
+      <SpellSummary tree={shot.tree} data={data} lang={lang} maps={maps} castState={shot.castState} />
 
       <div className="shot-columns">
         <section className="shot-tree">
@@ -1564,17 +1617,6 @@ function ShotCard({
           ))}
         </ol>
       </details>
-
-      {stateRows.length > 0 && (
-        <details className="shot-details">
-          <summary>{t(lang, 'result.stateTitle')}</summary>
-          <ul className="state-list">
-            {stateRows.map((row) => (
-              <li key={row.key}>{t(lang, `state.${row.key}`, { value: stateValue(row.format, row.value) })}</li>
-            ))}
-          </ul>
-        </details>
-      )}
     </article>
   );
 }

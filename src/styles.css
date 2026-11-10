@@ -1758,6 +1758,40 @@ main {
   background: rgba(43, 90, 74, 0.08);
 }
 
+.summary-state-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 6px 8px;
+  border: 1px dashed #3e5570;
+  border-radius: 8px;
+  background: rgba(30, 40, 58, 0.25);
+}
+
+.summary-state-label {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.summary-state-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.summary-state-chip {
+  font-size: 10px;
+  color: #b9c8dd;
+  border: 1px solid #3e5570;
+  border-radius: 999px;
+  padding: 0 6px;
+  background: rgba(0, 0, 0, 0.3);
+  white-space: nowrap;
+}
+
 .summary-effects-label {
   font-size: 10px;
   color: var(--muted);

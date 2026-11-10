@@ -147,6 +147,15 @@ const summaryTitles = await evaluate(
 if (summaryTitles.proj.includes('火花弹') === false) throw new Error('summary projectile tooltip missing name: ' + JSON.stringify(summaryTitles));
 if (!summaryTitles.mods.some((title) => title.includes('伤害增强') && title.includes('×1')))
   throw new Error('summary modifier tooltip missing name/count: ' + JSON.stringify(summaryTitles));
+const summaryChips = await evaluate(
+  "[...document.querySelectorAll('.summary-state-chip')].map((el) => el.innerText)",
+);
+if (!summaryChips.some((text) => text.includes('伤害'))) {
+  throw new Error('summary projectile card should include shot-state values: ' + JSON.stringify(summaryChips));
+}
+if ((await evaluate("document.querySelector('.state-list')?.innerText || ''")) !== '') {
+  throw new Error('the separate shot-state panel should be gone');
+}
 const treeSlots = await evaluate("document.querySelectorAll('.tree-slot').length");
 if (treeSlots === 0) throw new Error('tree should label spells with wand slot numbers');
 const treeDeltasBefore = await evaluate("document.querySelectorAll('.tree-delta').length");
