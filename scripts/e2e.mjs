@@ -110,6 +110,11 @@ await sleep(700);
 const stats = await waitFor("document.querySelector('.stats-bar')?.innerText || ''", 60000, 'stats bar');
 console.log('✓ bundled data:', stats.replace(/\n/g, ' | '));
 if (!/422/.test(stats)) throw new Error('expected 422 spells');
+const footerInfo = await evaluate(
+  "({ href: document.querySelector('.app-footer a')?.href || '', text: document.querySelector('.app-footer')?.innerText || '' })",
+);
+if (!footerInfo.href.includes('github.com/Heipen/noita-wand-sim')) throw new Error('footer repo link missing: ' + JSON.stringify(footerInfo));
+if (!footerInfo.text.includes('DSH') || !footerInfo.text.includes('Star')) throw new Error('footer attribution/star note missing: ' + footerInfo.text);
 
 // 2) default trigger wand -> cast tree (worker engine)
 const shotText = await waitFor("document.querySelector('.shot-card')?.innerText || ''", 60000, 'first shot');

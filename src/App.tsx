@@ -424,7 +424,18 @@ export default function App() {
       </main>
 
       {data && <SpellTooltip tooltip={tooltip} data={data} lang={lang} />}
-      <footer className="app-footer">{t(lang, 'footer.note')}</footer>
+      <footer className="app-footer">
+        <p className="footer-note">{t(lang, 'footer.note')}</p>
+        <p className="footer-meta">
+          <span>{t(lang, 'footer.madeWith')}</span>
+          <span className="footer-sep">·</span>
+          <a href="https://github.com/Heipen/noita-wand-sim" target="_blank" rel="noreferrer noopener">
+            {t(lang, 'footer.repo')}
+          </a>
+          <span className="footer-sep">·</span>
+          <span className="footer-star">{t(lang, 'footer.star')}</span>
+        </p>
+      </footer>
     </div>
   );
 }

@@ -360,6 +360,37 @@ main {
   text-align: center;
 }
 
+.footer-note,
+.footer-meta {
+  margin: 2px 0;
+}
+
+.footer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.footer-sep {
+  opacity: 0.5;
+}
+
+.footer-star {
+  color: #ffd479;
+}
+
+.app-footer a {
+  color: var(--accent-2);
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+
+.app-footer a:hover {
+  color: var(--accent);
+}
+
 .stats-bar .spacer {
   margin-left: auto;
 }
