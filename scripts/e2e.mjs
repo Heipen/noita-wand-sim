@@ -342,6 +342,20 @@ if (discardPileCounts[1] !== 0) throw new Error('discard step should show an emp
 if (!discardPileCounts[2] || discardPileCounts[2] === 0) throw new Error('discard step should show cards in discard: ' + JSON.stringify(discardPileCounts));
 console.log('✓ discard step snapshot shows post-discard piles');
 
+// early discards during a cast (e.g. D2 discarding the first spark bolt) are clickable too
+await loadWand(['DIVIDE_2', 'MANA_REDUCE', 'LIGHT_BULLET', 'LIGHT_BULLET'], { actionsPerRound: 4, capacity: 4 });
+await waitFor("document.querySelectorAll('.tree-discard[data-event-index]').length >= 2", 60000, 'early discard steps');
+await evaluate("document.querySelectorAll('.tree-discard[data-event-index] > .tree-line')[0].click(); true");
+await waitFor("!!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'selected early discard step');
+const earlyDiscardPiles = await evaluate("[...document.querySelectorAll('.piles-grid > .pile .pile-count')].map((el) => Number(el.innerText))");
+if (!earlyDiscardPiles[1] || earlyDiscardPiles[1] <= 0) {
+  throw new Error('early discard step should keep the remaining hand: ' + JSON.stringify(earlyDiscardPiles));
+}
+if (!earlyDiscardPiles[2] || earlyDiscardPiles[2] <= 0) {
+  throw new Error('early discard step should show the discarded card: ' + JSON.stringify(earlyDiscardPiles));
+}
+console.log('✓ early discard step is selectable with its own pile state');
+
 // count only real projectiles (the wand ghost's image emitter is a visual effect), and show
 // drawing utility spells among a projectile's modifiers
 await loadWand(['SUMMON_WANDGHOST']);

@@ -74,6 +74,7 @@ end
 local __pile_event_names = {
   callAction = true,
   drawCard = true,
+  discard = true,
   discardEnd = true,
 }
 
@@ -310,13 +311,17 @@ function __install_hooks()
   local orig_table_insert = table.insert
   table.insert = function(list, a, b)
     local value = b ~= nil and b or a
+    local result
+    if b ~= nil then
+      result = orig_table_insert(list, a, b)
+    else
+      result = orig_table_insert(list, a)
+    end
+    -- emit after the insertion so the pile snapshot already contains the discarded card
     if (not __inside_draw_action) and list == discarded and type(value) == 'table' and value.id then
       __ev('discard', value.id, #discarded, __current_action_id)
     end
-    if b ~= nil then
-      return orig_table_insert(list, a, b)
-    end
-    return orig_table_insert(list, a)
+    return result
   end
 
   -- 1) wrap every spell's action closure: captures recursion/iteration, "don't draw"
