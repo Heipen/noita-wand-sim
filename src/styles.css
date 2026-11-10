@@ -376,13 +376,37 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  margin: 2px 0;
+  gap: 4px;
+  margin: 4px 0 0;
+  opacity: 0.62;
+}
+
+.footer-visitors:hover {
+  opacity: 0.9;
 }
 
 .footer-visitors img {
-  height: 20px;
+  height: 16px;
   display: block;
+}
+
+.app-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.header-feedback {
+  color: var(--muted);
+  font-size: 11px;
+  text-decoration: none;
+  border-bottom: 1px dotted currentColor;
+}
+
+.header-feedback:hover {
+  color: var(--accent-2);
 }
 
 .footer-meta {
@@ -879,6 +903,29 @@ main {
   margin-top: 8px;
   font-size: 11px;
   color: var(--accent-2);
+}
+
+.tt-tier-table {
+  margin-top: 6px;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.tt-tier-table th {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: normal;
+  text-align: left;
+  white-space: nowrap;
+  padding: 1px 8px 1px 0;
+}
+
+.tt-tier-table td {
+  min-width: 2.2em;
+  padding: 1px 2px;
+  text-align: center;
+  white-space: nowrap;
 }
 
 /* cast result */

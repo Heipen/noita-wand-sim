@@ -50,6 +50,10 @@ function readInitialLang(): Lang {
   return 'zh';
 }
 
+function visitorBadgeUrl(path: string, label: string): string {
+  return `https://api.visitorbadge.io/api/visitors?path=${encodeURIComponent(path)}&label=${encodeURIComponent(label)}&labelColor=%23555&countColor=%23263759`;
+}
+
 function readInitialWand(): WandState {
   if (typeof window !== 'undefined') {
     const fromUrl = decodeWandFromQuery(window.location.search);
@@ -362,6 +366,10 @@ export default function App() {
     }
   }, [wand, lang]);
 
+  const now = new Date();
+  const localDay = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const visitorSite = 'heipen.github.io/noita-wand-sim';
+
   return (
     <div className="app">
       <header className="app-header">
@@ -369,9 +377,14 @@ export default function App() {
           <h1>{t(lang, 'app.title')}</h1>
           <p className="subtitle">{t(lang, 'app.subtitle')}</p>
         </div>
-        <button className="lang-switch" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}>
-          {t(lang, 'app.langSwitch')}
-        </button>
+        <div className="app-header-actions">
+          <a className="header-feedback" href="mailto:heipen111@foxmail.com">
+            {t(lang, 'header.feedback')}
+          </a>
+          <button className="lang-switch" onClick={() => setLang(lang === 'zh' ? 'en' : 'zh')}>
+            {t(lang, 'app.langSwitch')}
+          </button>
+        </div>
       </header>
 
       <main>
@@ -449,48 +462,6 @@ export default function App() {
       {data && <SpellTooltip tooltip={tooltip} data={data} lang={lang} />}
       <footer className="app-footer">
         <p className="footer-note">{t(lang, 'footer.note')}</p>
-        {phase === 'ready' && data && (
-          <p className="footer-data-actions">
-            {data.origin === 'local' ? (
-              <button type="button" className="link-button use-bundled" onClick={() => void useBundled()}>
-                {t(lang, 'stats.useBundled')}
-              </button>
-            ) : (
-              <button
-                type="button"
-                className="link-button use-local"
-                onClick={() => {
-                  setError(null);
-                  setPhase('empty');
-                }}
-              >
-                {t(lang, 'stats.useLocal')}
-              </button>
-            )}
-            <span className="footer-sep">·</span>
-            <button
-              type="button"
-              className="link-button"
-              onClick={() => {
-                setError(null);
-                setPhase('empty');
-              }}
-            >
-              {t(lang, 'stats.reimport')}
-            </button>
-          </p>
-        )}
-        <p className="footer-feedback">
-          {t(lang, 'footer.feedback')}
-          <a href="mailto:heipen111@foxmail.com">heipen111@foxmail.com</a>
-        </p>
-        <p className="footer-visitors">
-          <img
-            src="https://api.visitorbadge.io/api/visitors?path=heipen.github.io/noita-wand-sim&label=%E8%AE%BF%E5%AE%A2&labelColor=%23555&countColor=%23263759"
-            alt={t(lang, 'footer.visitors')}
-            loading="lazy"
-          />
-        </p>
         <p className="footer-meta">
           <span>{t(lang, 'footer.madeWith')}</span>
           <span className="footer-sep">·</span>
@@ -499,6 +470,18 @@ export default function App() {
           </a>
           <span className="footer-sep">·</span>
           <span className="footer-star">{t(lang, 'footer.star')}</span>
+        </p>
+        <p className="footer-visitors">
+          <img
+            src={visitorBadgeUrl(`${visitorSite}-today-${localDay}`, t(lang, 'footer.visitorsToday'))}
+            alt={t(lang, 'footer.visitorsToday')}
+            loading="lazy"
+          />
+          <img
+            src={visitorBadgeUrl(visitorSite, t(lang, 'footer.visitorsTotal'))}
+            alt={t(lang, 'footer.visitorsTotal')}
+            loading="lazy"
+          />
         </p>
       </footer>
     </div>

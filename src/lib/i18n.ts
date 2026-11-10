@@ -6,6 +6,7 @@ const zh: Dict = {
   'app.title': 'Noita 魔杖模拟器',
   'app.subtitle': '直接运行游戏自带的施法逻辑，在浏览器里模拟你的魔杖',
   'app.langSwitch': 'EN',
+  'header.feedback': 'Bug 反馈：heipen111@foxmail.com',
   'import.title': '先导入你的 Noita 数据',
   'import.desc':
     '模拟器不内置任何游戏数据。请选择你本机的 Noita 安装目录（或拖入 data/data.wak），浏览器会自己解析法术、图标与脚本。',
@@ -49,6 +50,8 @@ const zh: Dict = {
   'footer.star': '如果觉得有用，欢迎点个 Star ⭐',
   'footer.feedback': 'Bug 反馈 / 意见请发邮件给：',
   'footer.visitors': '访客',
+  'footer.visitorsToday': '今日',
+  'footer.visitorsTotal': '总计',
   'common.loading': '加载中…',
   'stats.useLocal': '使用本地数据',
   'stats.useBundled': '使用内置数据',
@@ -228,6 +231,7 @@ const en: Dict = {
   'app.title': 'Noita Wand Simulator',
   'app.subtitle': "Runs the game's own casting logic to simulate your wands in the browser",
   'app.langSwitch': '中文',
+  'header.feedback': 'Bugs: heipen111@foxmail.com',
   'import.title': 'Import your Noita data first',
   'import.desc':
     'No game data is bundled. Pick your local Noita install folder (or drop data/data.wak); the browser parses spells, icons and scripts locally.',
@@ -272,6 +276,8 @@ const en: Dict = {
   'footer.star': 'If it helps, a star is appreciated ⭐',
   'footer.feedback': 'Bug reports / feedback:',
   'footer.visitors': 'Visitors',
+  'footer.visitorsToday': 'Today',
+  'footer.visitorsTotal': 'Total',
   'common.loading': 'Loading…',
   'stats.useLocal': 'Use local data',
   'stats.useBundled': 'Use bundled data',

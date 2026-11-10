@@ -6,8 +6,7 @@
 //  3. clicking a spell fills a wand slot and updates the result
 //  4. dividing preset produces the known 800 projectiles
 //  5. hovering a spell shows the in-game style tooltip (type / mana / cast delay / unlock / tier)
-//  6. local data.wak import still works and the engine picks up its scripts
-//  7. i18n toggle
+//  6. i18n toggle
 //
 // Usage: npm run e2e   (needs `vite preview` on :4173 and Edge with --remote-debugging-port=9222)
 
@@ -15,9 +14,6 @@ import { writeFileSync } from 'node:fs';
 
 const APP_URL = process.env.APP_URL ?? 'http://127.0.0.1:4173/';
 const CDP = process.env.CDP_URL ?? 'http://127.0.0.1:9222';
-const NOITA_DIR = process.env.NOITA_DIR ?? 'C:/Program Files/Steam/steamapps/common/Noita';
-const WAK = `${NOITA_DIR}/data/data.wak`;
-const CSV = `${NOITA_DIR}/data/translations/common.csv`;
 const SHOT = process.env.SHOT_PATH ?? './e2e-m2.png';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -133,11 +129,14 @@ const stats = await waitFor("document.querySelector('.count')?.innerText || ''",
 console.log('✓ bundled data:', stats.replace(/\n/g, ' | '));
 if (!/422/.test(stats)) throw new Error('expected 422 spells');
 const footerInfo = await evaluate(
-  "({ href: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.includes('github.com/Heipen/noita-wand-sim'))?.href || '', mail: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.startsWith('mailto:heipen111@foxmail.com'))?.href || '', icon: document.querySelector('link[rel=icon]')?.href || '', visitors: document.querySelector('.footer-visitors img')?.src || '', text: document.querySelector('.app-footer')?.innerText || '' })",
+  "({ href: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.includes('github.com/Heipen/noita-wand-sim'))?.href || '', mail: document.querySelector('.header-feedback')?.href || '', icon: document.querySelector('link[rel=icon]')?.href || '', visitors: [...document.querySelectorAll('.footer-visitors img')].map((img) => img.src), text: document.querySelector('.app-footer')?.innerText || '' })",
 );
 if (!footerInfo.href.includes('github.com/Heipen/noita-wand-sim')) throw new Error('footer repo link missing: ' + JSON.stringify(footerInfo));
-if (footerInfo.mail !== 'mailto:heipen111@foxmail.com') throw new Error('footer feedback mail link missing: ' + JSON.stringify(footerInfo));
-if (!footerInfo.visitors.includes('api.visitorbadge.io')) throw new Error('footer visitor counter missing: ' + JSON.stringify(footerInfo));
+if (footerInfo.mail !== 'mailto:heipen111@foxmail.com') throw new Error('header feedback mail link missing: ' + JSON.stringify(footerInfo));
+if (footerInfo.visitors.length !== 2 || !footerInfo.visitors.every((src) => src.includes('api.visitorbadge.io'))) {
+  throw new Error('footer should show today+total visitor counters: ' + JSON.stringify(footerInfo));
+}
+if (!footerInfo.visitors.some((src) => src.includes('today-'))) throw new Error('daily visitor counter missing: ' + JSON.stringify(footerInfo));
 if (!footerInfo.text.includes('DSH') || !footerInfo.text.includes('Star')) throw new Error('footer attribution/star note missing: ' + footerInfo.text);
 if (!footerInfo.icon.endsWith('/favicon.png')) throw new Error('digger favicon missing: ' + JSON.stringify(footerInfo));
 
@@ -201,10 +200,14 @@ const mobileSearch = await evaluate(`(() => {
   const input = document.querySelector('.toolbar .search');
   const sticky = document.querySelector('.wand-sticky').getBoundingClientRect();
   const rect = input.getBoundingClientRect();
-  return { focused: document.activeElement === input, top: rect.top, stickyBottom: sticky.bottom, hints: document.querySelectorAll('.picker-target-hint').length };
+  const hint = document.querySelector('.picker-target-hint').getBoundingClientRect();
+  return { focused: document.activeElement === input, top: rect.top, stickyBottom: sticky.bottom, hintTop: hint.top, hintBottom: hint.bottom, viewport: window.innerHeight, hints: document.querySelectorAll('.picker-target-hint').length };
 })()`);
 if (mobileSearch.focused) throw new Error('search field must not be focused (mobile keyboard): ' + JSON.stringify(mobileSearch));
 if (mobileSearch.top < mobileSearch.stickyBottom - 1) throw new Error('search field should be scrolled below the sticky wand: ' + JSON.stringify(mobileSearch));
+if (mobileSearch.hintTop < 0 || mobileSearch.hintBottom > mobileSearch.viewport) {
+  throw new Error('target reminder/cancel must be visible on mobile: ' + JSON.stringify(mobileSearch));
+}
 if (mobileSearch.hints !== 1) throw new Error('only one target hint should be visible: ' + JSON.stringify(mobileSearch));
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.click(); return true; })()`);
 await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].filled')", 10000, 'wand slot target filled');
@@ -505,32 +508,20 @@ const expected = ['彩虹闪光', '投射修正', '法力消耗', '0', '施放�
 for (const needle of expected) {
   if (!tooltip.includes(needle)) throw new Error(`tooltip missing "${needle}": ${tooltip.replace(/\n/g, ' | ')}`);
 }
-const tierValues = await evaluate(
-  "[...document.querySelectorAll('.tt-tier-rows .tt-row dd')].map((dd) => dd.innerText)",
+const tierRows = await evaluate(
+  "[...document.querySelectorAll('.tt-tier-table tr')].map((row) => [...row.querySelectorAll('td')].map((el) => el.innerText))",
 );
-if (JSON.stringify(tierValues) !== JSON.stringify(['2, 3, 4, 10', '0.1, 0.1, 0.1, 0.2'])) {
-  throw new Error('tooltip tier/weight rows should align: ' + JSON.stringify(tierValues));
+if (JSON.stringify(tierRows) !== JSON.stringify([['2', '3', '4', '10'], ['0.1', '0.1', '0.1', '0.2']])) {
+  throw new Error('tooltip tier/weight rows mismatch: ' + JSON.stringify(tierRows));
 }
+const tierColumnsAligned = await evaluate(`(() => {
+  const rows = [...document.querySelectorAll('.tt-tier-table tr')].map((row) => [...row.querySelectorAll('td')].map((el) => Math.round(el.getBoundingClientRect().left)));
+  return { rows, aligned: rows.length === 2 && rows[0].every((left, index) => Math.abs(left - rows[1][index]) <= 1) };
+})()`);
+if (!tierColumnsAligned.aligned) throw new Error('tooltip tier/weight columns should align vertically: ' + JSON.stringify(tierColumnsAligned));
 console.log('✓ tooltip matches the game card:', tooltip.replace(/\n/g, ' | ').slice(0, 140) + '…');
 
-// 6) local data.wak import still works (engine receives the scripts)
-await evaluate("document.querySelector('.use-local').click()");
-await waitFor("!!document.querySelector('.import-panel input[type=file]')", 30000, 'import panel');
-const doc = await send('DOM.getDocument', { depth: -1 });
-const input = await send('DOM.querySelector', { nodeId: doc.root.nodeId, selector: 'input[type=file]' });
-if (!input.nodeId) throw new Error('file input not found');
-await send('DOM.setFileInputFiles', { files: [WAK, CSV], nodeId: input.nodeId });
-const localStats = await waitFor(
-  "!!document.querySelector('.use-bundled') && (document.querySelector('.count')?.innerText || '')",
-  180000,
-  'local import',
-);
-await waitFor("!!document.querySelector('.shot-card')", 60000, 'simulation after local import');
-console.log('✓ local import + engine restart:', localStats.replace(/\n/g, ' | '));
-
-// 7) back to bundled + i18n toggle
-await evaluate("document.querySelector('.use-bundled').click()");
-await waitFor("!!document.querySelector('.use-local')", 30000, 'back to bundled');
+// 7) i18n toggle
 await evaluate("document.querySelector('.lang-switch').click()");
 await sleep(300);
 const titleEn = await evaluate("document.querySelector('h1').innerText");

@@ -55,6 +55,15 @@ export function SpellPicker({
         <h2>{t(lang, 'picker.title')}</h2>
         <span className="panel-sub">{t(lang, 'picker.hint')}</span>
       </header>
+      <Toolbar
+        lang={lang}
+        query={query}
+        typeFilter={typeFilter}
+        shown={filtered.length}
+        total={data.spells.length}
+        onQueryChange={setQuery}
+        onTypeChange={setTypeFilter}
+      />
       {targetSlot !== null && (
         <div className="picker-target-hint">
           <span>
@@ -69,15 +78,6 @@ export function SpellPicker({
           </button>
         </div>
       )}
-      <Toolbar
-        lang={lang}
-        query={query}
-        typeFilter={typeFilter}
-        shown={filtered.length}
-        total={data.spells.length}
-        onQueryChange={setQuery}
-        onTypeChange={setTypeFilter}
-      />
       <div className="picker-grid">
         {filtered.map((spell) => (
           <SpellCard
