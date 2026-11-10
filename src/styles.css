@@ -636,6 +636,12 @@ main {
   display: block;
 }
 
+.always-toggle {
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .always-cast {
   margin-top: 10px;
   display: flex;
@@ -985,7 +991,7 @@ main {
 
 .piles {
   position: sticky;
-  top: 12px;
+  top: calc(var(--wand-sticky-height, 0px) + 12px);
   max-height: min(70vh, 720px);
   overflow: auto;
 }
@@ -1360,7 +1366,7 @@ main {
 /* evaluation tree */
 
 .shot-tree {
-  overflow: visible;
+  overflow: auto;
   min-width: 0;
 }
 
@@ -2031,10 +2037,11 @@ main {
   .wand-slot {
     width: 36px;
     height: 36px;
+    flex: 0 0 36px;
   }
 
   .wand-slots {
-    max-height: 118px;
+    max-height: 88px;
   }
 }
 

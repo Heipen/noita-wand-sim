@@ -167,7 +167,16 @@ for (const needle of ['抽到并执行「触发火花弹」', '开启命中触�
 }
 if (treeText.includes('生成投射物')) throw new Error('tree should not have a separate projectile line: ' + treeText);
 
-// 3) click a spell to fill the next empty slot
+// Always Cast is opt-in: hidden and ignored by default, shown after enabling the toggle.
+if (await evaluate("!!document.querySelector('.always-cast')")) {
+  throw new Error('always cast should be hidden by default');
+}
+if (await evaluate("document.querySelector('.always-toggle input')?.checked")) {
+  throw new Error('always cast toggle should be off by default');
+}
+await evaluate("document.querySelector('.always-toggle input').click(); true");
+await waitFor("!!document.querySelector('.always-cast')", 10000, 'always cast visible after toggle');
+console.log('✓ always cast hidden and ignored until enabled');
 const filledBefore = await evaluate("document.querySelectorAll('.wand-slot.filled').length");
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.scrollIntoView({ block: 'center' }); el.click(); return true; })()`);
 await waitFor(`document.querySelectorAll('.wand-slot.filled').length === ${filledBefore + 1}`, 15000, 'slot filled');
@@ -189,6 +198,25 @@ await send('Emulation.setUserAgentOverride', { userAgent: mobileUA, platform: 'A
 await send('Page.reload');
 await sleep(700);
 await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'mobile UA reload');
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await sleep(300);
+const mobileWandRows = await evaluate(`(() => {
+  const slots = document.querySelector('.wand-slots');
+  const tops = [...new Set([...slots.querySelectorAll('.wand-slot')].map((el) => Math.round(el.getBoundingClientRect().top)))];
+  const first = slots.querySelector('.wand-slot');
+  return {
+    clientHeight: slots.clientHeight,
+    scrollHeight: slots.scrollHeight,
+    slotHeight: first ? first.getBoundingClientRect().height : 0,
+    rowPitch: (tops[1] ?? tops[0]) - tops[0],
+  };
+})()`);
+if (mobileWandRows.scrollHeight <= mobileWandRows.clientHeight) throw new Error('mobile wand slots should scroll: ' + JSON.stringify(mobileWandRows));
+if (!(mobileWandRows.clientHeight >= mobileWandRows.rowPitch + mobileWandRows.slotHeight && mobileWandRows.clientHeight < 2 * mobileWandRows.rowPitch + mobileWandRows.slotHeight)) {
+  throw new Error('mobile wand slots should show two full rows plus a partial third: ' + JSON.stringify(mobileWandRows));
+}
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
+await sleep(200);
 // ordinary wand slot: tap -> search visible -> choose spell
 await evaluate("document.querySelector('.wand-slot[data-slot=\"2\"]').click(); true");
 await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].targeted')", 10000, 'wand slot targeting');

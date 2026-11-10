@@ -40,6 +40,8 @@ interface Props {
   onSavePreset: (name: string, wand: WandState) => void;
   onDeletePreset: (id: string) => void;
   copied: boolean;
+  alwaysCastEnabled: boolean;
+  onAlwaysCastToggle: (enabled: boolean) => void;
   isMobile: boolean;
   spellTarget?: SpellTarget | null;
   onSlotTarget?: (kind: SpellTarget['kind'], index: number) => void;
@@ -121,6 +123,8 @@ export function WandEditor({
   onSavePreset,
   onDeletePreset,
   copied,
+  alwaysCastEnabled,
+  onAlwaysCastToggle,
   isMobile,
   spellTarget = null,
   onSlotTarget,
@@ -211,10 +215,11 @@ export function WandEditor({
             </div>
           ))}
         </div>
-        <div className="always-cast">
-          <span className="field-label">{t(lang, 'editor.alwaysCast')}</span>
-          <div className="always-slots">
-            {Array.from({ length: MAX_ALWAYS_CAST }, (_, index) => {
+        {alwaysCastEnabled && (
+          <div className="always-cast">
+            <span className="field-label">{t(lang, 'editor.alwaysCast')}</span>
+            <div className="always-slots">
+              {Array.from({ length: MAX_ALWAYS_CAST }, (_, index) => {
               const id = wand.alwaysCast[index] ?? null;
               const spell: SpellMeta | undefined = id ? spellById.get(id) : undefined;
               const icon = spell ? spellIconUrl(data, spell) : undefined;
@@ -251,9 +256,10 @@ export function WandEditor({
                   )}
                 </div>
               );
-            })}
+              })}
+            </div>
           </div>
-        </div>
+        )}
       </section>
 
       <section className="panel wand-editor">
@@ -317,6 +323,14 @@ export function WandEditor({
           >
             {t(lang, 'editor.clear')}
           </button>
+          <label className="field checkbox-field always-toggle">
+            <input
+              type="checkbox"
+              checked={alwaysCastEnabled}
+              onChange={(event) => onAlwaysCastToggle(event.target.checked)}
+            />
+            <span className="field-label">{t(lang, 'editor.alwaysCastEnabled')}</span>
+          </label>
         </div>
 
         <div className="wand-stats">

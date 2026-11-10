@@ -36,6 +36,7 @@ import type { GameData, Lang } from './lib/types';
 const LANG_KEY = 'noita-wand-sim.lang';
 const PREFER_LOCAL_KEY = 'noita-wand-sim.preferLocal';
 const PRESETS_KEY = 'noita-wand-sim.presets';
+const ALWAYS_CAST_KEY = 'noita-wand-sim.alwaysCast';
 
 type Phase = 'boot' | 'empty' | 'loading' | 'ready';
 type SimMode = 'single' | 'untilReload';
@@ -48,6 +49,14 @@ function readInitialLang(): Lang {
     /* ignore */
   }
   return 'zh';
+}
+
+function readAlwaysCastEnabled(): boolean {
+  try {
+    return localStorage.getItem(ALWAYS_CAST_KEY) === '1';
+  } catch {
+    return false;
+  }
 }
 
 function visitorBadgeUrl(path: string, label: string): string {
@@ -121,6 +130,7 @@ export default function App() {
   const [data, setData] = useState<GameData | null>(null);
   const [bundled, setBundled] = useState<GameData | null>(null);
   const [wand, setWand] = useState<WandState>(readInitialWand);
+  const [alwaysCastEnabled, setAlwaysCastEnabled] = useState(readAlwaysCastEnabled);
   const [spellTarget, setSpellTarget] = useState<SpellTarget | null>(null);
   const [isMobile] = useState(
     () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent),
@@ -142,6 +152,34 @@ export default function App() {
       /* ignore */
     }
   }, [lang]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ALWAYS_CAST_KEY, alwaysCastEnabled ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [alwaysCastEnabled]);
+
+  // Keep the sticky pile panel below the sticky wand bar.
+  useEffect(() => {
+    const sticky = document.querySelector<HTMLElement>('.wand-sticky');
+    if (!sticky) return;
+    const update = () => {
+      document.documentElement.style.setProperty(
+        '--wand-sticky-height',
+        `${Math.ceil(sticky.getBoundingClientRect().height)}px`,
+      );
+    };
+    update();
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(update) : null;
+    observer?.observe(sticky);
+    window.addEventListener('resize', update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [phase, alwaysCastEnabled]);
 
   // Boot: bundled data first (zero setup), local import only when the user asked for it.
   useEffect(() => {
@@ -232,7 +270,7 @@ export default function App() {
   useEffect(() => {
     if (phase !== 'ready' || !data) return;
     const slots = wand.spells.slice(0, wand.capacity);
-    const hasSpells = slots.some(Boolean) || wand.alwaysCast.some(Boolean);
+    const hasSpells = slots.some(Boolean) || (alwaysCastEnabled && wand.alwaysCast.some(Boolean));
     if (!hasSpells) {
       setResult(null);
       setSimError(null);
@@ -244,6 +282,7 @@ export default function App() {
     setSimError(null);
     const handle = window.setTimeout(() => {
       const engineWand = toEngineWand(wand);
+      if (!alwaysCastEnabled) engineWand.always_cast = [];
       simulateWand(engineWand, {
         clicks: 1,
         untilReload: mode === 'untilReload',
@@ -266,7 +305,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [phase, data, wand, mode]);
+  }, [phase, data, wand, mode, alwaysCastEnabled]);
 
   // Keep the URL shareable at all times.
   useEffect(() => {
@@ -447,6 +486,8 @@ export default function App() {
                 onSavePreset={savePreset}
                 onDeletePreset={deletePreset}
                 copied={copied}
+                alwaysCastEnabled={alwaysCastEnabled}
+                onAlwaysCastToggle={setAlwaysCastEnabled}
                 isMobile={isMobile}
                 spellTarget={spellTarget}
                 onSlotTarget={isMobile ? chooseSpellTarget : undefined}
