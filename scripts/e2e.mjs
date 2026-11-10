@@ -195,6 +195,14 @@ if ((await evaluate("document.querySelectorAll('.always-cast-tap-hint').length")
 // ordinary wand slot: tap -> search visible -> choose spell
 await evaluate("document.querySelector('.wand-slot[data-slot=\"2\"]').click(); true");
 await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].targeted')", 10000, 'wand slot targeting');
+const targetedStyle = await evaluate(`(() => {
+  const el = document.querySelector('.wand-slot[data-slot="2"].targeted');
+  const style = getComputedStyle(el);
+  return { outline: style.outlineStyle, shadow: style.boxShadow };
+})()`);
+if (targetedStyle.outline === 'none' && targetedStyle.shadow === 'none') {
+  throw new Error('selected spell slot needs a visible highlight: ' + JSON.stringify(targetedStyle));
+}
 await sleep(350);
 const mobileSearch = await evaluate(`(() => {
   const input = document.querySelector('.toolbar .search');
