@@ -202,7 +202,7 @@ const zh: Dict = {
   'result.pilesAtStepNote': '（所选步骤执行后）',
   'result.pilesBackToEnd': '回到施法结束',
   'result.pilesClickHint': '点击施法树中的步骤可查看该步骤执行后的牌库、手牌和弃牌',
-  'result.castBlock': '施法动作汇总',
+  'result.castBlock': '施法动作',
   'result.castBlockRoot': '主施法块',
   'result.castBlockPayload': '触发载荷',
   'result.castBlockCount': '{actions} 个动作 · {kinds} 种法术',

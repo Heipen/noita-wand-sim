@@ -1864,24 +1864,25 @@ function ShotCard({
                 </span>
               </div>
               {castBlockGroups.map((block, blockIndex) => (
-                <div className="cast-block-group" key={`${block.root ? 'root' : block.projectile ?? 'payload'}-${blockIndex}`}>
+                <div
+                  className={`cast-block-group${block.root ? '' : ' cast-block-payload'}`}
+                  key={`${block.root ? 'root' : block.projectile ?? 'payload'}-${blockIndex}`}
+                >
                   <div className="cast-block-label">
                     {block.root ? t(lang, 'result.castBlockRoot') : t(lang, 'result.castBlockPayload')}
-                    {!block.root && block.projectile && (
-                      <span className="muted">
-                        {' '}
-                        · {spellName(maps.byEntity.get(block.projectile), entityLabel(block.projectile), lang)}
-                      </span>
-                    )}
                   </div>
                   <div className="cast-block-chips">
                     {block.actions.map(({ id, count }) => {
                       const spell = maps.byId.get(id);
                       const name = spellName(spell, id, lang);
                       return (
-                        <span className="cast-block-chip" title={`${name} ×${count}`} key={id}>
+                        <span
+                          className="cast-block-chip"
+                          title={`${name} ×${count}`}
+                          aria-label={`${name} ×${count}`}
+                          key={id}
+                        >
                           <SpellIcon spell={spell} data={data} />
-                          <span>{name}</span>
                           {count > 1 && <b>×{count}</b>}
                         </span>
                       );

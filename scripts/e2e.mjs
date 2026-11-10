@@ -169,7 +169,7 @@ if (treeText.includes('生成投射物')) throw new Error('tree should not have 
 
 // trigger payload actions are shown as their own cast block in the action summary
 await loadWand(['LIGHT_BULLET_TRIGGER', 'BOUNCE', 'AIR_BULLET', 'LIGHT_BULLET'], { actionsPerRound: 4, capacity: 26 });
-await waitFor("document.querySelector('.cast-block-preview')?.innerText.includes('强气流')", 60000, 'trigger payload cast block');
+await waitFor("!!document.querySelector('.cast-block-chip[title*=\"强气流\"]')", 60000, 'trigger payload cast block');
 const payloadBlockText = await evaluate("document.querySelector('.cast-block-preview')?.innerText || ''");
 if (!payloadBlockText.includes('触发载荷')) throw new Error('payload block label missing: ' + payloadBlockText);
 console.log('✓ trigger payload cast block shown in action summary');
@@ -438,7 +438,7 @@ const wikiTree = await evaluate("document.querySelector('.shot-tree')?.innerText
 if (!wikiTree.includes('禁抽')) throw new Error('tree missing the don\'t-draw copy: ' + wikiTree.slice(0, 400));
 const repeatBadge = await evaluate("(document.querySelector('.tree-repeat')?.innerText || '')");
 if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated siblings, got badge: ' + repeatBadge);
-const blockChips = await evaluate("[...document.querySelectorAll('.cast-block-chip')].map((el) => el.innerText)");
+const blockChips = await evaluate("[...document.querySelectorAll('.cast-block-chip')].map((el) => el.title)");
 if (!blockChips.some((text) => text.includes('伤害增强') && text.includes('×11'))) {
   throw new Error('cast block preview should merge repeated spells: ' + JSON.stringify(blockChips));
 }

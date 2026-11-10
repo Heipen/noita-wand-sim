@@ -1054,6 +1054,12 @@ main {
   margin-top: 7px;
 }
 
+.cast-block-payload {
+  margin-left: 12px;
+  padding-left: 8px;
+  border-left: 1px solid #3e5570;
+}
+
 .cast-block-label {
   margin-bottom: 3px;
   font-size: 10px;
