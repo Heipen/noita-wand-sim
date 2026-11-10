@@ -24,6 +24,11 @@ export interface CustomPreset {
   wand: WandState;
 }
 
+export interface SpellTarget {
+  kind: 'wand' | 'always';
+  index: number;
+}
+
 interface Props {
   data: GameData;
   lang: Lang;
@@ -35,9 +40,9 @@ interface Props {
   onSavePreset: (name: string, wand: WandState) => void;
   onDeletePreset: (id: string) => void;
   copied: boolean;
-  alwaysCastTarget?: number | null;
-  onAlwaysSlotClick?: (index: number) => void;
-  onCancelAlwaysCast?: () => void;
+  isMobile: boolean;
+  spellTarget?: SpellTarget | null;
+  onSlotTarget?: (kind: SpellTarget['kind'], index: number) => void;
 }
 
 function NumberField({
@@ -116,9 +121,9 @@ export function WandEditor({
   onSavePreset,
   onDeletePreset,
   copied,
-  alwaysCastTarget = null,
-  onAlwaysSlotClick,
-  onCancelAlwaysCast,
+  isMobile,
+  spellTarget = null,
+  onSlotTarget,
 }: Props) {
   const spellById = useMemo(() => new Map(data.spells.map((spell) => [spell.id, spell])), [data.spells]);
   const [selectedPreset, setSelectedPreset] = useState('');
@@ -184,9 +189,12 @@ export function WandEditor({
           {slots.map((id, index) => (
             <div
               key={index}
-              className={`wand-slot${id ? ' filled' : ''}`}
+              className={`wand-slot${id ? ' filled' : ''}${spellTarget?.kind === 'wand' && spellTarget.index === index ? ' targeted' : ''}`}
               data-slot={index}
               draggable={Boolean(id)}
+              onClick={() => {
+                if (isMobile) onSlotTarget?.('wand', index);
+              }}
               onDragStart={(event) => {
                 if (!id) return;
                 event.dataTransfer.setData('application/x-slot', String(index));
@@ -206,14 +214,6 @@ export function WandEditor({
         <div className="always-cast">
           <span className="field-label">{t(lang, 'editor.alwaysCast')}</span>
           <div className="always-slots">
-            {alwaysCastTarget !== null && (
-              <span className="always-target-hint">
-                {t(lang, 'picker.alwaysTarget', { n: alwaysCastTarget + 1 })}
-                <button type="button" className="link-button" onClick={onCancelAlwaysCast}>
-                  {t(lang, 'picker.cancelTarget')}
-                </button>
-              </span>
-            )}
             {Array.from({ length: MAX_ALWAYS_CAST }, (_, index) => {
               const id = wand.alwaysCast[index] ?? null;
               const spell: SpellMeta | undefined = id ? spellById.get(id) : undefined;
@@ -221,10 +221,12 @@ export function WandEditor({
               return (
                 <div
                   key={index}
-                  className={`wand-slot always-slot${id ? ' filled' : ''}${alwaysCastTarget === index ? ' targeted' : ''}`}
+                  className={`wand-slot always-slot${id ? ' filled' : ''}${spellTarget?.kind === 'always' && spellTarget.index === index ? ' targeted' : ''}`}
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => onDropToAlways(index, event)}
-                  onClick={() => onAlwaysSlotClick?.(index)}
+                  onClick={() => {
+                    if (isMobile) onSlotTarget?.('always', index);
+                  }}
                   onPointerEnter={(event) => {
                     if (spell) hover.show(event, spell);
                   }}
@@ -251,7 +253,9 @@ export function WandEditor({
               );
             })}
           </div>
-          <span className="always-cast-tap-hint">{t(lang, 'editor.alwaysCastTapHint')}</span>
+          {isMobile && (
+            <span className="always-cast-tap-hint">{t(lang, 'editor.alwaysCastTapHint')}</span>
+          )}
         </div>
       </section>
 

@@ -3,7 +3,7 @@ import { CastResult } from './components/CastResult';
 import { ImportPanel } from './components/ImportPanel';
 import { SpellPicker } from './components/SpellPicker';
 import { SpellTooltip } from './components/SpellTooltip';
-import { WandEditor, type CustomPreset } from './components/WandEditor';
+import { WandEditor, type CustomPreset, type SpellTarget } from './components/WandEditor';
 import { useSpellTooltip } from './hooks/useSpellTooltip';
 import { loadBundledData } from './lib/bundledData';
 import {
@@ -117,7 +117,10 @@ export default function App() {
   const [data, setData] = useState<GameData | null>(null);
   const [bundled, setBundled] = useState<GameData | null>(null);
   const [wand, setWand] = useState<WandState>(readInitialWand);
-  const [alwaysCastTarget, setAlwaysCastTarget] = useState<number | null>(null);
+  const [spellTarget, setSpellTarget] = useState<SpellTarget | null>(null);
+  const [isMobile] = useState(
+    () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent),
+  );
   const [customPresets, setCustomPresets] = useState<CustomPreset[]>(readCustomPresets);
   const [mode, setMode] = useState<SimMode>('single');
   const [result, setResult] = useState<Awaited<ReturnType<typeof simulateWand>> | null>(null);
@@ -311,9 +314,13 @@ export default function App() {
 
   const addSpell = useCallback(
     (spellId: string) => {
-      if (alwaysCastTarget !== null) {
-        setWand(setAlwaysCast(wand, alwaysCastTarget, spellId));
-        setAlwaysCastTarget(null);
+      if (spellTarget !== null) {
+        setWand(
+          spellTarget.kind === 'always'
+            ? setAlwaysCast(wand, spellTarget.index, spellId)
+            : placeSpell(wand, spellTarget.index, spellId),
+        );
+        setSpellTarget(null);
         return;
       }
       const slot = firstEmptySlot(wand);
@@ -321,18 +328,28 @@ export default function App() {
         setWand(placeSpell(wand, slot, spellId));
       }
     },
-    [wand, alwaysCastTarget],
+    [wand, spellTarget],
   );
 
-  const chooseAlwaysCastSlot = useCallback((index: number) => {
-    setAlwaysCastTarget((current) => (current === index ? null : index));
-    // on touch devices the picker is far below the sticky wand bar: bring it into view
-    if (window.matchMedia?.('(pointer: coarse)').matches) {
-      requestAnimationFrame(() => {
-        document.querySelector('.spell-picker')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      });
-    }
-  }, []);
+  const chooseSpellTarget = useCallback(
+    (kind: SpellTarget['kind'], index: number) => {
+      const same = spellTarget?.kind === kind && spellTarget.index === index;
+      setSpellTarget(same ? null : { kind, index });
+      if (same) return;
+      // bring the search field into view below the sticky wand bar; its height changes with
+      // capacity, so use the live measured height instead of a fixed offset
+      setTimeout(() => {
+        const input = document.querySelector<HTMLInputElement>('.toolbar .search');
+        const sticky = document.querySelector<HTMLElement>('.wand-sticky');
+        if (!input) return;
+        input.focus({ preventScroll: true });
+        const offset = (sticky?.getBoundingClientRect().height ?? 0) + 12;
+        const rect = input.getBoundingClientRect();
+        window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
+      }, 50);
+    },
+    [spellTarget],
+  );
 
   const share = useCallback(async () => {
     const url = shareUrlForWand(wand);
@@ -403,17 +420,17 @@ export default function App() {
                 onSavePreset={savePreset}
                 onDeletePreset={deletePreset}
                 copied={copied}
-                alwaysCastTarget={alwaysCastTarget}
-                onAlwaysSlotClick={chooseAlwaysCastSlot}
-                onCancelAlwaysCast={() => setAlwaysCastTarget(null)}
+                isMobile={isMobile}
+                spellTarget={spellTarget}
+                onSlotTarget={isMobile ? chooseSpellTarget : undefined}
               />
               <SpellPicker
                 data={data}
                 lang={lang}
                 hover={{ show: showTooltip, hide: hideTooltip }}
                 onAdd={addSpell}
-                alwaysCastTarget={alwaysCastTarget}
-                onCancelAlwaysCast={() => setAlwaysCastTarget(null)}
+                targetSlot={spellTarget}
+                onCancelTarget={() => setSpellTarget(null)}
               />
               <CastResult
                 result={result}

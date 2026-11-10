@@ -4,6 +4,7 @@ import type { GameData, Lang, SpellType } from '../lib/types';
 import spellAliases from '../data/spellAliases.json';
 import { Toolbar } from './Toolbar';
 import { SpellCard, type HoverHandlers } from './SpellCard';
+import type { SpellTarget } from './WandEditor';
 
 const ALIASES = spellAliases as Record<string, string[]>;
 
@@ -12,8 +13,8 @@ interface Props {
   lang: Lang;
   hover: HoverHandlers;
   onAdd: (spellId: string) => void;
-  alwaysCastTarget?: number | null;
-  onCancelAlwaysCast?: () => void;
+  targetSlot?: SpellTarget | null;
+  onCancelTarget?: () => void;
 }
 
 export function SpellPicker({
@@ -21,8 +22,8 @@ export function SpellPicker({
   lang,
   hover,
   onAdd,
-  alwaysCastTarget = null,
-  onCancelAlwaysCast,
+  targetSlot = null,
+  onCancelTarget,
 }: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<SpellType | 'all'>('all');
@@ -54,10 +55,16 @@ export function SpellPicker({
         <h2>{t(lang, 'picker.title')}</h2>
         <span className="panel-sub">{t(lang, 'picker.hint')}</span>
       </header>
-      {alwaysCastTarget !== null && (
+      {targetSlot !== null && (
         <div className="picker-target-hint">
-          <span>{t(lang, 'picker.alwaysTarget', { n: alwaysCastTarget + 1 })}</span>
-          <button type="button" className="secondary" onClick={onCancelAlwaysCast}>
+          <span>
+            {t(
+              lang,
+              targetSlot.kind === 'always' ? 'picker.alwaysTarget' : 'picker.wandTarget',
+              { n: targetSlot.index + 1 },
+            )}
+          </span>
+          <button type="button" className="secondary" onClick={onCancelTarget}>
             {t(lang, 'picker.cancelTarget')}
           </button>
         </div>

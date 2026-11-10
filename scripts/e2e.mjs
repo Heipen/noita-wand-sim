@@ -173,21 +173,58 @@ await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spe
 await waitFor(`document.querySelectorAll('.wand-slot.filled').length === ${filledBefore + 1}`, 15000, 'slot filled');
 console.log('✓ click-to-add works, filled slots:', await evaluate("document.querySelectorAll('.wand-slot.filled').length"));
 
-// 3a) tapping an Always Cast slot targets it, then tapping a spell places it there (mobile flow)
-await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
-await waitFor(
-  "!!document.querySelector('.always-slot.targeted') && !!document.querySelector('.picker-target-hint')",
-  10000,
-  'always cast targeting',
-);
-await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.scrollIntoView({ block: 'center' }); el.click(); return true; })()`);
-await waitFor("document.querySelectorAll('.always-slot.filled').length === 1", 10000, 'always cast filled');
-if ((await evaluate("document.querySelectorAll('.picker-target-hint').length")) !== 0) {
-  throw new Error('always-cast targeting hint should disappear after choosing a spell');
+// 3a) desktop has no tap-to-place logic; mobile UA gets the tap flow for both slot types
+const desktopUA = await evaluate('navigator.userAgent');
+if ((await evaluate("document.querySelectorAll('.always-cast-tap-hint').length")) !== 0) {
+  throw new Error('desktop should not show the mobile tap hint');
 }
-await evaluate("document.querySelector('.always-slot.filled .slot-remove').click(); true");
-await waitFor("document.querySelectorAll('.always-slot.filled').length === 0", 10000, 'always cast cleared');
-console.log('✓ tap-to-target Always Cast works');
+await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
+await sleep(200);
+if ((await evaluate("document.querySelectorAll('.picker-target-hint, .always-slot.targeted').length")) !== 0) {
+  throw new Error('desktop should not enter tap-to-place targeting');
+}
+const mobileUA =
+  'Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36';
+await send('Emulation.setUserAgentOverride', { userAgent: mobileUA, platform: 'Android' });
+await send('Page.reload');
+await sleep(700);
+await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'mobile UA reload');
+if ((await evaluate("document.querySelectorAll('.always-cast-tap-hint').length")) !== 1) {
+  throw new Error('mobile should show exactly one tap hint');
+}
+// ordinary wand slot: tap -> search visible -> choose spell
+await evaluate("document.querySelector('.wand-slot[data-slot=\"2\"]').click(); true");
+await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].targeted')", 10000, 'wand slot targeting');
+await sleep(350);
+const mobileSearch = await evaluate(`(() => {
+  const input = document.querySelector('.toolbar .search');
+  const sticky = document.querySelector('.wand-sticky').getBoundingClientRect();
+  const rect = input.getBoundingClientRect();
+  return { focused: document.activeElement === input, top: rect.top, stickyBottom: sticky.bottom, hints: document.querySelectorAll('.picker-target-hint').length };
+})()`);
+if (!mobileSearch.focused) throw new Error('search field should be focused after tapping a slot: ' + JSON.stringify(mobileSearch));
+if (mobileSearch.top < mobileSearch.stickyBottom - 1) throw new Error('search field should be scrolled below the sticky wand: ' + JSON.stringify(mobileSearch));
+if (mobileSearch.hints !== 1) throw new Error('only one target hint should be visible: ' + JSON.stringify(mobileSearch));
+await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.click(); return true; })()`);
+await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].filled')", 10000, 'wand slot target filled');
+if ((await evaluate("document.querySelectorAll('.picker-target-hint').length")) !== 0) {
+  throw new Error('target hint should disappear after choosing a spell');
+}
+// Always Cast slot: same tap flow, and the four slots stay on one row
+await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
+await waitFor("!!document.querySelector('.always-slot.targeted')", 10000, 'always cast targeting');
+await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.click(); return true; })()`);
+await waitFor("document.querySelectorAll('.always-slot.filled').length === 1", 10000, 'always cast filled');
+const alwaysRows = await evaluate(
+  "[...document.querySelectorAll('.always-slot')].map((el) => Math.round(el.getBoundingClientRect().top))",
+);
+if (new Set(alwaysRows).size !== 1) throw new Error('always cast slots must stay on one row: ' + JSON.stringify(alwaysRows));
+console.log('✓ mobile tap-to-target works for wand and Always Cast slots');
+await send('Emulation.setUserAgentOverride', { userAgent: desktopUA, platform: 'Win32' });
+await send('Page.reload');
+await sleep(700);
+await waitFor("document.querySelector('.count')?.innerText.includes('422')", 60000, 'desktop UA restore');
+await waitFor("!!document.querySelector('.shot-card')", 60000, 'desktop shot after UA restore');
 
 // 3b) modifier summary (icons + tooltips) + casting steps; stat-change chips hidden until toggled on
 await loadWand(['DAMAGE', 'LIGHT_BULLET', 'LIGHT_BULLET'], {
@@ -463,9 +500,15 @@ await sleep(300);
 const box = await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="COLOUR_RAINBOW"]'); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: box.x, y: box.y });
 const tooltip = await waitFor("document.querySelector('.spell-tooltip')?.innerText || ''", 10000, 'tooltip');
-const expected = ['彩虹闪光', '投射修正', '法力消耗', '0', '施放延迟', '-0.13', '找到实验性魔杖', '2,3,4,10', '0.1,0.1,0.1,0.2'];
+const expected = ['彩虹闪光', '投射修正', '法力消耗', '0', '施放延迟', '-0.13', '找到实验性魔杖', '法术等级', '对应等级生成权重'];
 for (const needle of expected) {
   if (!tooltip.includes(needle)) throw new Error(`tooltip missing "${needle}": ${tooltip.replace(/\n/g, ' | ')}`);
+}
+const tierRows = await evaluate(
+  "[...document.querySelectorAll('.tt-tier-row:not(.tt-tier-head)')].map((row) => [row.children[0].innerText, row.children[1].innerText])",
+);
+if (JSON.stringify(tierRows) !== JSON.stringify([['2', '0.1'], ['3', '0.1'], ['4', '0.1'], ['10', '0.2']])) {
+  throw new Error('tooltip tiers and weights should align per row: ' + JSON.stringify(tierRows));
 }
 console.log('✓ tooltip matches the game card:', tooltip.replace(/\n/g, ' | ').slice(0, 140) + '…');
 

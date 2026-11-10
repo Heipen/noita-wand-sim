@@ -63,12 +63,19 @@ export function SpellTooltip({ tooltip, data, lang }: Props) {
   } else if (spell.spawnRequiresFlag && !spell.unlockZh) {
     extraRows.push({ label: t(lang, 'tooltip.unlock'), value: spell.spawnRequiresFlag });
   }
-  if (spell.spawnLevel) {
-    extraRows.push({ label: t(lang, 'tooltip.spawnLevel'), value: spell.spawnLevel });
-  }
-  if (spell.spawnProbability) {
-    extraRows.push({ label: t(lang, 'tooltip.spawnProbability'), value: spell.spawnProbability });
-  }
+  const levels = (spell.spawnLevel ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const probabilities = (spell.spawnProbability ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const tiers = levels.map((level, index) => ({
+    level,
+    probability: probabilities[index] ?? '—',
+    key: `${level}-${index}`,
+  }));
 
   return (
     <div
@@ -106,6 +113,20 @@ export function SpellTooltip({ tooltip, data, lang }: Props) {
             </div>
           ))}
         </dl>
+      )}
+      {tiers.length > 0 && (
+        <div className="tt-tier-table">
+          <div className="tt-tier-row tt-tier-head">
+            <span>{t(lang, 'tooltip.spawnLevel')}</span>
+            <span>{t(lang, 'tooltip.spawnProbability')}</span>
+          </div>
+          {tiers.map((tier) => (
+            <div className="tt-tier-row" key={tier.key}>
+              <span>{tier.level}</span>
+              <span>{tier.probability}</span>
+            </div>
+          ))}
+        </div>
       )}
       {lang === 'zh' && spell.aliasNoteZh && <div className="tt-note">{spell.aliasNoteZh}</div>}
     </div>
