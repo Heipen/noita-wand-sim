@@ -1543,20 +1543,35 @@ function countSpells(ids: string[]): Map<string, number> {
   return counts;
 }
 
-function changedSpellsBetween(
-  current: { deck: string[]; hand: string[]; discarded: string[] },
-  previous: { deck: string[]; hand: string[]; discarded: string[] } | null,
-): Set<string> {
-  const changed = new Set<string>();
-  if (!previous) return changed;
-  for (const key of ['deck', 'hand', 'discarded'] as const) {
-    const currentCounts = countSpells(current[key]);
-    const previousCounts = countSpells(previous[key]);
-    for (const id of new Set([...currentCounts.keys(), ...previousCounts.keys()])) {
-      if ((currentCounts.get(id) ?? 0) !== (previousCounts.get(id) ?? 0)) changed.add(id);
+type PileStateLike = { deck: string[]; hand: string[]; discarded: string[] };
+type PileChanges = { deck: Set<number>; hand: Set<number>; discarded: Set<number> };
+
+/** Mark only the first newly added occurrence of each spell in a pile. */
+function addedPileIndices(current: string[], previous: string[]): Set<number> {
+  const previousCounts = countSpells(previous);
+  const used = new Map<string, number>();
+  const marked = new Set<string>();
+  const indices = new Set<number>();
+  current.forEach((id, index) => {
+    const allowed = previousCounts.get(id) ?? 0;
+    const seen = used.get(id) ?? 0;
+    used.set(id, seen + 1);
+    if (seen < allowed) return;
+    if (!marked.has(id)) {
+      marked.add(id);
+      indices.add(index);
     }
-  }
-  return changed;
+  });
+  return indices;
+}
+
+function changedPileIndices(current: PileStateLike, previous: PileStateLike | null): PileChanges {
+  if (!previous) return { deck: new Set(), hand: new Set(), discarded: new Set() };
+  return {
+    deck: addedPileIndices(current.deck, previous.deck),
+    hand: addedPileIndices(current.hand, previous.hand),
+    discarded: addedPileIndices(current.discarded, previous.discarded),
+  };
 }
 
 function Pile({
@@ -1565,14 +1580,14 @@ function Pile({
   data,
   lang,
   maps,
-  changedIds,
+  changedIndices,
 }: {
   title: string;
   ids: string[];
   data: GameData;
   lang: Lang;
   maps: SpellMaps;
-  changedIds?: Set<string>;
+  changedIndices?: Set<number>;
 }) {
   return (
     <div className="pile">
@@ -1586,7 +1601,7 @@ function Pile({
           const name = spellName(spell, id, lang);
           return (
             <span
-              className={`pile-chip${changedIds?.has(id) ? ' changed' : ''}`}
+              className={`pile-chip${changedIndices?.has(index) ? ' changed' : ''}`}
               key={`${id}-${index}`}
               title={name}
               aria-label={name}
@@ -1675,6 +1690,7 @@ function ShotCard({
   showDeltas,
   foldRepeats,
   showCastDiscards,
+  baselinePiles,
   wandSpells,
 }: {
   shot: ShotResult;
@@ -1684,6 +1700,7 @@ function ShotCard({
   showDeltas: boolean;
   foldRepeats: boolean;
   showCastDiscards: boolean;
+  baselinePiles: PileStateLike;
   wandSpells: (string | null)[];
 }) {
   const maps = useSpellMaps(data);
@@ -1733,15 +1750,15 @@ function ShotCard({
   const selectedPileIndex = selectedPiles
     ? shot.pileSteps.findIndex((step) => step.eventIndex === selectedPiles.eventIndex)
     : -1;
-  const changedIds = useMemo(
+  const changedIndices = useMemo(
     () =>
       selectedPiles
-        ? changedSpellsBetween(
+        ? changedPileIndices(
             selectedPiles,
-            selectedPileIndex > 0 ? shot.pileSteps[selectedPileIndex - 1] : null,
+            selectedPileIndex > 0 ? shot.pileSteps[selectedPileIndex - 1] : baselinePiles,
           )
-        : new Set<string>(),
-    [selectedPiles, selectedPileIndex, shot.pileSteps],
+        : { deck: new Set<number>(), hand: new Set<number>(), discarded: new Set<number>() },
+    [selectedPiles, selectedPileIndex, shot.pileSteps, baselinePiles],
   );
   const castBlockGroups = useMemo(
     () => groupCastBlocks(shot.tree, selectedEvent),
@@ -1940,15 +1957,15 @@ function ShotCard({
             </div>
           )}
           <div className="piles-grid">
-            <Pile title={t(lang, 'result.pileDeck')} ids={selectedPiles?.deck ?? shot.deck} data={data} lang={lang} maps={maps} changedIds={changedIds} />
-            <Pile title={t(lang, 'result.pileHand')} ids={selectedPiles?.hand ?? shot.hand} data={data} lang={lang} maps={maps} changedIds={changedIds} />
+            <Pile title={t(lang, 'result.pileDeck')} ids={selectedPiles?.deck ?? shot.deck} data={data} lang={lang} maps={maps} changedIndices={changedIndices.deck} />
+            <Pile title={t(lang, 'result.pileHand')} ids={selectedPiles?.hand ?? shot.hand} data={data} lang={lang} maps={maps} changedIndices={changedIndices.hand} />
             <Pile
               title={t(lang, 'result.pileDiscard')}
               ids={selectedPiles?.discarded ?? shot.discarded}
               data={data}
               lang={lang}
               maps={maps}
-              changedIds={changedIds}
+              changedIndices={changedIndices.discarded}
             />
             {!selectedPiles && showCastDiscards && castDiscards.length > 0 && (
               <div className="cast-discards">
@@ -2003,6 +2020,14 @@ export function CastResult({
 }: Props) {
   const [showDeltas, setShowDeltas] = useState(false);
   const [foldRepeats, setFoldRepeats] = useState(true);
+  const initialPiles = useMemo<PileStateLike>(
+    () => ({
+      deck: wandSpells.filter((id): id is string => Boolean(id)),
+      hand: [],
+      discarded: [],
+    }),
+    [wandSpells],
+  );
 
   return (
     <section className="panel cast-result">
@@ -2046,19 +2071,28 @@ export function CastResult({
 
       {result && (
         <div className="shot-list">
-          {result.shots.map((shot, index) => (
-            <ShotCard
-              key={index}
-              shot={shot}
-              index={index}
-              data={data}
-              lang={lang}
-              showDeltas={showDeltas}
-              foldRepeats={foldRepeats}
-              showCastDiscards={mode === 'untilReload' && result.shots.length > 1}
-              wandSpells={wandSpells}
-            />
-          ))}
+          {result.shots.map((shot, index) => {
+            const previous = index > 0 ? result.shots[index - 1] : initialPiles;
+            const baselinePiles: PileStateLike = {
+              deck: previous.deck,
+              hand: previous.hand,
+              discarded: previous.discarded,
+            };
+            return (
+              <ShotCard
+                key={index}
+                shot={shot}
+                index={index}
+                data={data}
+                lang={lang}
+                showDeltas={showDeltas}
+                foldRepeats={foldRepeats}
+                showCastDiscards={mode === 'untilReload' && result.shots.length > 1}
+                baselinePiles={baselinePiles}
+                wandSpells={wandSpells}
+              />
+            );
+          })}
         </div>
       )}
     </section>

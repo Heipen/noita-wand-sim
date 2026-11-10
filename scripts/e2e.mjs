@@ -333,6 +333,7 @@ await evaluate("document.querySelector('.tree-node[data-event-index] > .tree-lin
 await waitFor("!!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'selected tree step');
 const pilesAfter = await evaluate("document.querySelector('.piles-grid')?.innerText || ''");
 if (!pilesAfter || pilesAfter === pilesBefore) throw new Error('selecting a tree step should change the displayed piles');
+if ((await evaluate("document.querySelectorAll('.pile-chip.changed').length")) === 0) throw new Error('first selected step should highlight changes against the initial piles');
 if (!(await evaluate("document.body.innerText.includes('回到施法结束')"))) throw new Error('selected pile state should offer a reset action');
 await evaluate("document.querySelector('.piles-reset')?.click(); true");
 await waitFor("!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'pile selection reset');
