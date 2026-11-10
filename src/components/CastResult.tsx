@@ -1762,7 +1762,7 @@ function ShotCard({
     : -1;
   const changedIndices = useMemo(
     () =>
-      selectedPiles
+      selectedPiles && selectedPiles.eventIndex === selectedEvent
         ? changedPileIndices(
             selectedPiles,
             selectedPileIndex > 0 ? shot.pileSteps[selectedPileIndex - 1] : baselinePiles,
