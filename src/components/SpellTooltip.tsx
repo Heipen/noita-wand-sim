@@ -115,18 +115,16 @@ export function SpellTooltip({ tooltip, data, lang }: Props) {
         </dl>
       )}
       {tiers.length > 0 && (
-        <div className="tt-tier-table">
-          <div className="tt-tier-row tt-tier-head">
-            <span>{t(lang, 'tooltip.spawnLevel')}</span>
-            <span>{t(lang, 'tooltip.spawnProbability')}</span>
+        <dl className="tt-rows tt-extra tt-tier-rows">
+          <div className="tt-row">
+            <dt>{t(lang, 'tooltip.spawnLevel')}</dt>
+            <dd>{levels.join(', ')}</dd>
           </div>
-          {tiers.map((tier) => (
-            <div className="tt-tier-row" key={tier.key}>
-              <span>{tier.level}</span>
-              <span>{tier.probability}</span>
-            </div>
-          ))}
-        </div>
+          <div className="tt-row">
+            <dt>{t(lang, 'tooltip.spawnProbability')}</dt>
+            <dd>{probabilities.slice(0, levels.length).join(', ')}</dd>
+          </div>
+        </dl>
       )}
       {lang === 'zh' && spell.aliasNoteZh && <div className="tt-note">{spell.aliasNoteZh}</div>}
     </div>

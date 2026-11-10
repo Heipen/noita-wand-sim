@@ -133,10 +133,11 @@ const stats = await waitFor("document.querySelector('.count')?.innerText || ''",
 console.log('✓ bundled data:', stats.replace(/\n/g, ' | '));
 if (!/422/.test(stats)) throw new Error('expected 422 spells');
 const footerInfo = await evaluate(
-  "({ href: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.includes('github.com/Heipen/noita-wand-sim'))?.href || '', mail: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.startsWith('mailto:heipen111@foxmail.com'))?.href || '', icon: document.querySelector('link[rel=icon]')?.href || '', text: document.querySelector('.app-footer')?.innerText || '' })",
+  "({ href: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.includes('github.com/Heipen/noita-wand-sim'))?.href || '', mail: [...document.querySelectorAll('.app-footer a')].find((a) => a.href.startsWith('mailto:heipen111@foxmail.com'))?.href || '', icon: document.querySelector('link[rel=icon]')?.href || '', visitors: document.querySelector('.footer-visitors img')?.src || '', text: document.querySelector('.app-footer')?.innerText || '' })",
 );
 if (!footerInfo.href.includes('github.com/Heipen/noita-wand-sim')) throw new Error('footer repo link missing: ' + JSON.stringify(footerInfo));
 if (footerInfo.mail !== 'mailto:heipen111@foxmail.com') throw new Error('footer feedback mail link missing: ' + JSON.stringify(footerInfo));
+if (!footerInfo.visitors.includes('api.visitorbadge.io')) throw new Error('footer visitor counter missing: ' + JSON.stringify(footerInfo));
 if (!footerInfo.text.includes('DSH') || !footerInfo.text.includes('Star')) throw new Error('footer attribution/star note missing: ' + footerInfo.text);
 if (!footerInfo.icon.endsWith('/favicon.png')) throw new Error('digger favicon missing: ' + JSON.stringify(footerInfo));
 
@@ -202,7 +203,7 @@ const mobileSearch = await evaluate(`(() => {
   const rect = input.getBoundingClientRect();
   return { focused: document.activeElement === input, top: rect.top, stickyBottom: sticky.bottom, hints: document.querySelectorAll('.picker-target-hint').length };
 })()`);
-if (!mobileSearch.focused) throw new Error('search field should be focused after tapping a slot: ' + JSON.stringify(mobileSearch));
+if (mobileSearch.focused) throw new Error('search field must not be focused (mobile keyboard): ' + JSON.stringify(mobileSearch));
 if (mobileSearch.top < mobileSearch.stickyBottom - 1) throw new Error('search field should be scrolled below the sticky wand: ' + JSON.stringify(mobileSearch));
 if (mobileSearch.hints !== 1) throw new Error('only one target hint should be visible: ' + JSON.stringify(mobileSearch));
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.click(); return true; })()`);
@@ -504,11 +505,11 @@ const expected = ['彩虹闪光', '投射修正', '法力消耗', '0', '施放�
 for (const needle of expected) {
   if (!tooltip.includes(needle)) throw new Error(`tooltip missing "${needle}": ${tooltip.replace(/\n/g, ' | ')}`);
 }
-const tierRows = await evaluate(
-  "[...document.querySelectorAll('.tt-tier-row:not(.tt-tier-head)')].map((row) => [row.children[0].innerText, row.children[1].innerText])",
+const tierValues = await evaluate(
+  "[...document.querySelectorAll('.tt-tier-rows .tt-row dd')].map((dd) => dd.innerText)",
 );
-if (JSON.stringify(tierRows) !== JSON.stringify([['2', '0.1'], ['3', '0.1'], ['4', '0.1'], ['10', '0.2']])) {
-  throw new Error('tooltip tiers and weights should align per row: ' + JSON.stringify(tierRows));
+if (JSON.stringify(tierValues) !== JSON.stringify(['2, 3, 4, 10', '0.1, 0.1, 0.1, 0.2'])) {
+  throw new Error('tooltip tier/weight rows should align: ' + JSON.stringify(tierValues));
 }
 console.log('✓ tooltip matches the game card:', tooltip.replace(/\n/g, ' | ').slice(0, 140) + '…');
 

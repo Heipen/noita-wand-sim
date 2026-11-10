@@ -342,7 +342,7 @@ export default function App() {
         const input = document.querySelector<HTMLInputElement>('.toolbar .search');
         const sticky = document.querySelector<HTMLElement>('.wand-sticky');
         if (!input) return;
-        input.focus({ preventScroll: true });
+        // do not focus the input: on phones that would pop up the keyboard; only reveal it
         const offset = (sticky?.getBoundingClientRect().height ?? 0) + 12;
         const rect = input.getBoundingClientRect();
         window.scrollTo({ top: window.scrollY + rect.top - offset, behavior: 'smooth' });
@@ -483,6 +483,13 @@ export default function App() {
         <p className="footer-feedback">
           {t(lang, 'footer.feedback')}
           <a href="mailto:heipen111@foxmail.com">heipen111@foxmail.com</a>
+        </p>
+        <p className="footer-visitors">
+          <img
+            src="https://api.visitorbadge.io/api/visitors?path=heipen.github.io/noita-wand-sim&label=%E8%AE%BF%E5%AE%A2&labelColor=%23555&countColor=%23263759"
+            alt={t(lang, 'footer.visitors')}
+            loading="lazy"
+          />
         </p>
         <p className="footer-meta">
           <span>{t(lang, 'footer.madeWith')}</span>
