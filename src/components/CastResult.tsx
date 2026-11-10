@@ -265,65 +265,167 @@ export type { GroupedEntry, GroupedNode };
 
 // --- spell summary -----------------------------------------------------------
 
+interface SummaryTrigger {
+  kind: 'timer' | 'hitWorld' | 'death';
+  payload: SummaryItem[];
+}
+
 interface SummaryItem {
   entity: string;
   count: number;
   modifiers: [string, number][];
+  trigger?: SummaryTrigger;
 }
 
-function summarizeProjectiles(
-  tree: CastTreeNode,
-  maps: SpellMaps,
-): { items: SummaryItem[]; projectileCount: number; modifierKinds: number } {
-  const items = new Map<string, SummaryItem>();
-  let projectileCount = 0;
+function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
+  const collected: { entity: string; trigger?: SummaryTrigger }[] = [];
+  const modifierCounts = new Map<string, number>();
 
-  const processScope = (nodes: CastTreeNode[]) => {
-    const projectiles: string[] = [];
-    const modifiers: string[] = [];
-    const triggers: CastTreeNode[] = [];
-
-    const walk = (node: CastTreeNode) => {
-      switch (node.kind) {
-        case 'action': {
-          const spell = maps.byId.get(node.id);
-          if (spell?.type === 'modifier') modifiers.push(node.id);
-          for (const entity of node.projectiles) projectiles.push(entity);
-          node.children.forEach(walk);
-          break;
+  const walk = (node: CastTreeNode) => {
+    switch (node.kind) {
+      case 'action': {
+        const spell = maps.byId.get(node.id);
+        if (spell?.type === 'modifier') {
+          modifierCounts.set(node.id, (modifierCounts.get(node.id) ?? 0) + 1);
         }
-        case 'trigger':
-          triggers.push(node);
-          break;
-        default:
-          node.children.forEach(walk);
-          break;
+        for (const entity of node.projectiles) {
+          const triggerNode = node.children.find(
+            (child): child is Extract<CastTreeNode, { kind: 'trigger' }> =>
+              child.kind === 'trigger' && child.projectile === entity,
+          );
+          collected.push({
+            entity,
+            trigger: triggerNode
+              ? { kind: triggerNode.triggerKind, payload: summarizeNodes(triggerNode.children, maps) }
+              : undefined,
+          });
+        }
+        node.children.forEach((child) => {
+          // a trigger node belongs to the projectile that carries it: its payload was
+          // summarized above in a fresh modifier scope, not in the outer cast block
+          if (child.kind !== 'trigger') walk(child);
+        });
+        break;
       }
-    };
-    nodes.forEach(walk);
-
-    const counts = new Map<string, number>();
-    for (const id of modifiers) counts.set(id, (counts.get(id) ?? 0) + 1);
-    const signature = [...counts.entries()]
-      .map(([id, count]) => `${id}:${count}`)
-      .sort()
-      .join(',');
-    const modifierList = [...counts.entries()];
-
-    for (const entity of projectiles) {
-      projectileCount += 1;
-      const key = `${entity}|${signature}`;
-      const existing = items.get(key);
-      if (existing) existing.count += 1;
-      else items.set(key, { entity, count: 1, modifiers: modifierList });
+      case 'trigger':
+        break;
+      default:
+        node.children.forEach(walk);
+        break;
     }
-    triggers.forEach((trigger) => processScope(trigger.children));
   };
+  nodes.forEach(walk);
 
-  processScope(tree.children);
-  const modifierKinds = new Set<string>();
-  for (const item of items.values()) for (const [id] of item.modifiers) modifierKinds.add(id);
-  return { items: [...items.values()], projectileCount, modifierKinds: modifierKinds.size };
+  const modifierList = [...modifierCounts.entries()];
+  const modifierSignature = modifierList
+    .map(([id, count]) => `${id}:${count}`)
+    .sort()
+    .join(',');
+  const grouped = new Map<string, SummaryItem>();
+
+  for (const projectile of collected) {
+    const triggerSignature = projectile.trigger
+      ? JSON.stringify([
+          projectile.trigger.kind,
+          projectile.trigger.payload.map((item) => [item.entity, item.count, item.modifiers]),
+        ])
+      : '';
+    const key = `${projectile.entity}|${modifierSignature}|${triggerSignature}`;
+    const existing = grouped.get(key);
+    if (existing) existing.count += 1;
+    else {
+      grouped.set(key, {
+        entity: projectile.entity,
+        count: 1,
+        modifiers: modifierList,
+        trigger: projectile.trigger,
+      });
+    }
+  }
+  return [...grouped.values()];
+}
+
+function countSummary(items: SummaryItem[], acc = { projectiles: 0, modifiers: new Set<string>() }) {
+  for (const item of items) {
+    acc.projectiles += item.count;
+    for (const [id] of item.modifiers) acc.modifiers.add(id);
+    if (item.trigger) countSummary(item.trigger.payload, acc);
+  }
+  return acc;
+}
+
+function SummaryItemCard({
+  item,
+  data,
+  lang,
+  maps,
+  depth = 0,
+}: {
+  item: SummaryItem;
+  data: GameData;
+  lang: Lang;
+  maps: SpellMaps;
+  depth?: number;
+}) {
+  const spell = maps.byEntity.get(item.entity);
+  const projectileName = spellName(spell, entityLabel(item.entity), lang);
+
+  return (
+    <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}`}>
+      <div className="summary-card-main">
+        <div className="summary-zone summary-projectile-zone">
+          <span className="summary-zone-label">{t(lang, 'summary.labelProjectile')}</span>
+          <span className="summary-proj" title={projectileName}>
+            <SpellIcon spell={spell} data={data} size="big" />
+            <span className="summary-count">×{item.count}</span>
+          </span>
+        </div>
+        {item.modifiers.length > 0 && (
+          <div className="summary-zone summary-modifier-zone">
+            <span className="summary-zone-label">{t(lang, 'summary.labelModifier')}</span>
+            <span className="summary-mods-icons">
+              {item.modifiers.map(([id, count]) => {
+                const modSpell = maps.byId.get(id);
+                const modName = spellName(modSpell, id, lang);
+                return (
+                  <span className="summary-mod" key={id} title={`${modName} ×${count}`}>
+                    <SpellIcon spell={modSpell} data={data} />
+                    <sup>×{count}</sup>
+                  </span>
+                );
+              })}
+            </span>
+          </div>
+        )}
+      </div>
+      {item.trigger && (
+        <div className="summary-trigger">
+          <div className="summary-trigger-head">
+            <span className="summary-trigger-badge">
+              {t(lang, triggerLabel(item.trigger.kind))}
+            </span>
+            <span className="summary-trigger-arrow">→</span>
+          </div>
+          <div className="summary-trigger-payload">
+            {item.trigger.payload.length === 0 ? (
+              <span className="muted small">{t(lang, 'summary.none')}</span>
+            ) : (
+              item.trigger.payload.map((child, index) => (
+                <SummaryItemCard
+                  key={index}
+                  item={child}
+                  data={data}
+                  lang={lang}
+                  maps={maps}
+                  depth={depth + 1}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SpellSummary({
@@ -337,7 +439,11 @@ function SpellSummary({
   lang: Lang;
   maps: SpellMaps;
 }) {
-  const summary = useMemo(() => summarizeProjectiles(tree, maps), [tree, maps]);
+  const summary = useMemo(() => {
+    const items = summarizeNodes(tree.children, maps);
+    const counts = countSummary(items);
+    return { items, projectileCount: counts.projectiles, modifierKinds: counts.modifiers.size };
+  }, [tree, maps]);
   return (
     <section className="spell-summary">
       <h4>{t(lang, 'result.summary')}</h4>
@@ -346,38 +452,9 @@ function SpellSummary({
       ) : (
         <>
           <div className="summary-grid">
-            {summary.items.map((item, index) => {
-              const spell = maps.byEntity.get(item.entity);
-              const projectileName = spellName(spell, entityLabel(item.entity), lang);
-              return (
-                <div className="summary-card" key={index}>
-                  <div className="summary-zone summary-projectile-zone">
-                    <span className="summary-zone-label">{t(lang, 'summary.labelProjectile')}</span>
-                    <span className="summary-proj" title={projectileName}>
-                      <SpellIcon spell={spell} data={data} size="big" />
-                      <span className="summary-count">×{item.count}</span>
-                    </span>
-                  </div>
-                  {item.modifiers.length > 0 && (
-                    <div className="summary-zone summary-modifier-zone">
-                      <span className="summary-zone-label">{t(lang, 'summary.labelModifier')}</span>
-                      <span className="summary-mods-icons">
-                        {item.modifiers.map(([id, count]) => {
-                          const modSpell = maps.byId.get(id);
-                          const modName = spellName(modSpell, id, lang);
-                          return (
-                            <span className="summary-mod" key={id} title={`${modName} ×${count}`}>
-                              <SpellIcon spell={modSpell} data={data} />
-                              <sup>×{count}</sup>
-                            </span>
-                          );
-                        })}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {summary.items.map((item, index) => (
+              <SummaryItemCard key={index} item={item} data={data} lang={lang} maps={maps} />
+            ))}
           </div>
           <div className="summary-total muted small">
             {t(lang, 'summary.total', { projectiles: summary.projectileCount, modifiers: summary.modifierKinds })}
