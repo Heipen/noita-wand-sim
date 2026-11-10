@@ -460,10 +460,14 @@ const tauSummary = await waitFor(
 if (tauSummary !== 'tau ok') throw new Error('tau chain should make 32 spark bolts');
 const tauTree = await evaluate("document.querySelector('.shot-tree')?.innerText || ''");
 if (!tauTree.includes('未复制任何法术')) throw new Error('tree should mark the empty copied divide: ' + tauTree.slice(0, 600));
-const tauPiles = await evaluate("document.querySelector('.piles')?.innerText || ''");
-if (!tauPiles.includes('本次施法弃牌') || !tauPiles.includes('充能后会回到牌库')) {
-  throw new Error('piles should list the cards discarded during the cast: ' + tauPiles);
-}
+if (await evaluate("!!document.querySelector('.cast-discards')")) throw new Error('single mode should not show cast discards');
+await loadWand(['DIVIDE_2', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET'], { capacity: 6 });
+await evaluate("document.querySelectorAll('.mode-btn')[1].click(); true");
+await waitFor("document.querySelectorAll('.shot-card').length > 1", 60000, 'multiple casts until reload');
+await waitFor("!!document.querySelector('.cast-discards')", 60000, 'cast discards with multiple casts');
+await evaluate("document.querySelectorAll('.mode-btn')[0].click(); true");
+await waitFor("document.querySelectorAll('.shot-card').length === 1", 60000, 'back to single cast');
+if (await evaluate("!!document.querySelector('.cast-discards')")) throw new Error('cast discards should be hidden again in single mode');
 console.log('✓ Tau + divide chain: 32 spark bolts, deck wiped, second copy empty');
 
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1200, deviceScaleFactor: 1, mobile: false });

@@ -1633,6 +1633,7 @@ function ShotCard({
   lang,
   showDeltas,
   foldRepeats,
+  showCastDiscards,
   wandSpells,
 }: {
   shot: ShotResult;
@@ -1641,6 +1642,7 @@ function ShotCard({
   lang: Lang;
   showDeltas: boolean;
   foldRepeats: boolean;
+  showCastDiscards: boolean;
   wandSpells: (string | null)[];
 }) {
   const maps = useSpellMaps(data);
@@ -1893,7 +1895,7 @@ function ShotCard({
               lang={lang}
               maps={maps}
             />
-            {!selectedPiles && castDiscards.length > 0 && (
+            {!selectedPiles && showCastDiscards && castDiscards.length > 0 && (
               <div className="cast-discards">
                 <Pile title={t(lang, 'result.castDiscards')} ids={castDiscards} data={data} lang={lang} maps={maps} />
                 <div className="pile-note muted small">{t(lang, 'result.castDiscardsNote')}</div>
@@ -1998,6 +2000,7 @@ export function CastResult({
               lang={lang}
               showDeltas={showDeltas}
               foldRepeats={foldRepeats}
+              showCastDiscards={mode === 'untilReload' && result.shots.length > 1}
               wandSpells={wandSpells}
             />
           ))}

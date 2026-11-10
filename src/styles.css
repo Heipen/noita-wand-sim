@@ -1012,7 +1012,7 @@ main {
 }
 
 .shot-tree {
-  max-height: min(70vh, 720px);
+  max-height: min(100vh, 1080px);
   overflow: auto;
   padding-right: 4px;
 }
@@ -2102,7 +2102,7 @@ main {
   }
 
   .shot-tree {
-    max-height: 48vh;
+    max-height: 72vh;
     overflow: auto;
   }
 
