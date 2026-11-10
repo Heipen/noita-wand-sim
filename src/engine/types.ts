@@ -30,6 +30,8 @@ export type EngineEvent =
     }
   | { type: 'callActionEnd' }
   | { type: 'discard'; spellId: string; discardedCount: number; sourceAction: string | null }
+  | { type: 'discardBegin' }
+  | { type: 'discardEnd' }
   | {
       type: 'action';
       id: string;

@@ -74,7 +74,7 @@ end
 local __pile_event_names = {
   drawCard = true,
   callActionEnd = true,
-  discard = true,
+  discardEnd = true,
 }
 
 function __ev(name, ...)
@@ -406,6 +406,16 @@ function __install_hooks()
   function _start_shot(current_mana)
     __ev('shotStart', current_mana, __frame)
     return orig_start_shot(current_mana)
+  end
+
+  -- move_hand_to_discarded inserts every card and only clears hand at the end; capture
+  -- the pile state after the whole flush so a discard step shows the card already moved.
+  local orig_move_hand_to_discarded = move_hand_to_discarded
+  function move_hand_to_discarded()
+    __ev('discardBegin')
+    local result = orig_move_hand_to_discarded()
+    __ev('discardEnd')
+    return result
   end
 
   local orig_draw_actions_for_shot = _draw_actions_for_shot

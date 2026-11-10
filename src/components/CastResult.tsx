@@ -529,17 +529,30 @@ function summaryStateChips(
   });
 }
 
+/** Sum of the immediate action children inside a node (their deltas include their own children). */
+function immediateActionDamage(children: CastTreeNode[]): number {
+  let total = 0;
+  const walk = (node: CastTreeNode) => {
+    if (node.kind === 'trigger') return;
+    if (node.kind === 'action') {
+      total += node.delta?.damage_projectile_add ?? 0;
+      return;
+    }
+    node.children.forEach(walk);
+  };
+  children.forEach(walk);
+  return total;
+}
+
 /** Blood/Gold to Power add damage from values the simulator cannot know; show a formula
- *  note instead of pretending it is a fixed number. */
+ *  note instead of pretending it is a fixed number. A parent action's delta already
+ *  contains its child actions, so only count the part the power spell itself added. */
 function collectPowerFormulaDamage(tree: CastTreeNode): number {
   let total = 0;
   const walk = (node: CastTreeNode) => {
     if (node.kind === 'trigger') return;
-    if (
-      node.kind === 'action' &&
-      (node.id === 'BLOOD_TO_POWER' || node.id === 'MONEY_MAGIC')
-    ) {
-      total += node.delta?.damage_projectile_add ?? 0;
+    if (node.kind === 'action' && (node.id === 'BLOOD_TO_POWER' || node.id === 'MONEY_MAGIC')) {
+      total += (node.delta?.damage_projectile_add ?? 0) - immediateActionDamage(node.children);
     }
     node.children.forEach(walk);
   };

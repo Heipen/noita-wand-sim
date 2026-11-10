@@ -115,6 +115,12 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
           sourceAction: entry[3] === undefined ? null : String(entry[3]),
         });
         break;
+      case 'discardBegin':
+        events.push({ type: 'discardBegin' });
+        break;
+      case 'discardEnd':
+        events.push({ type: 'discardEnd' });
+        break;
       case 'action': {
         const deltaRaw = entry[3];
         let delta: Record<string, number> | undefined;

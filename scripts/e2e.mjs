@@ -296,6 +296,16 @@ const pilesReset = await evaluate("document.querySelector('.piles-grid')?.innerT
 if (pilesReset !== pilesBefore) throw new Error('reset should restore the end-of-cast piles');
 console.log('✓ tree step click shows per-step piles and resets');
 
+// end-of-cast hand flush: discard step must show the card already in discard and hand empty
+await loadWand(['BURST_3', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET'], { capacity: 4 });
+await waitFor("!!document.querySelector('.tree-discard[data-event-index]')", 60000, 'discard step');
+await evaluate("document.querySelector('.tree-discard[data-event-index] > .tree-line').click(); true");
+await waitFor("!!document.querySelector('.tree-node[data-selected=\"true\"]')", 10000, 'selected discard step');
+const discardPileCounts = await evaluate("[...document.querySelectorAll('.piles-grid > .pile .pile-count')].map((el) => Number(el.innerText))");
+if (discardPileCounts[1] !== 0) throw new Error('discard step should show an empty hand: ' + JSON.stringify(discardPileCounts));
+if (!discardPileCounts[2] || discardPileCounts[2] === 0) throw new Error('discard step should show cards in discard: ' + JSON.stringify(discardPileCounts));
+console.log('✓ discard step snapshot shows post-discard piles');
+
 // count only real projectiles (the wand ghost's image emitter is a visual effect), and show
 // drawing utility spells among a projectile's modifiers
 await loadWand(['SUMMON_WANDGHOST']);
@@ -330,6 +340,16 @@ await waitFor(
   60000,
   'gold to power formula chip',
 );
+await loadWand(['MONEY_MAGIC', 'BLOOD_TO_POWER', 'LIGHT_BULLET']);
+await waitFor(
+  "[...document.querySelectorAll('.summary-state-chip')].some((el) => el.innerText.includes('10909') && el.innerText.includes('24000'))",
+  60000,
+  'combined power formula chips',
+);
+const combinedPowerChips = await evaluate("[...document.querySelectorAll('.summary-state-chip')].map((el) => el.innerText)");
+if (combinedPowerChips.some((text) => text.includes('-1100'))) {
+  throw new Error('nested power spells must not subtract their nested damage twice: ' + JSON.stringify(combinedPowerChips));
+}
 console.log('✓ Blood/Gold to Power use formula notes instead of fixed player stats');
 
 // 4) divide-by-10 chain => 800 projectiles

@@ -23,6 +23,7 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
   // draw_action returns. Keep the played action around and move it under its drawCard node.
   const unattachedActions: { action: CastTreeNode; parent: CastTreeNode }[] = [];
   const actionStack: Extract<CastTreeNode, { kind: 'action' }>[] = [];
+  let pendingDiscards: Extract<CastTreeNode, { kind: 'discard' }>[] = [];
 
   const top = (): CastTreeNode => stack[stack.length - 1];
 
@@ -143,12 +144,19 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
           kind: 'discard',
           spellId: event.spellId,
           sourceAction: event.sourceAction,
-          eventIndex,
           children: [],
         };
+        pendingDiscards.push(node);
         top().children.push(node);
         break;
       }
+      case 'discardBegin':
+        pendingDiscards = [];
+        break;
+      case 'discardEnd':
+        for (const discard of pendingDiscards) discard.eventIndex = eventIndex;
+        pendingDiscards = [];
+        break;
       default:
         break;
     }
