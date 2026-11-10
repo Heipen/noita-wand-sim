@@ -269,12 +269,10 @@ await evaluate("document.querySelector('.tree-repeat').click(); true");
 await sleep(250);
 const repeatExpanded = await evaluate("document.querySelectorAll('.tree-action').length");
 if (repeatExpanded <= repeatBefore) throw new Error('clicking ×N should expand the repeated tree group');
-const collapseButtons = await evaluate("document.querySelectorAll('.tree-collapse').length");
-if (collapseButtons === 0) throw new Error('expanded tree group should offer a collapse button');
-await evaluate("document.querySelector('.tree-collapse').click(); true");
+await evaluate("document.querySelector('.tree-repeat').click(); true");
 await sleep(250);
 const repeatCollapsed = await evaluate("document.querySelectorAll('.tree-action').length");
-if (repeatCollapsed !== repeatBefore) throw new Error('collapsing should restore the folded tree');
+if (repeatCollapsed !== repeatBefore) throw new Error('clicking ×N again should collapse it');
 const storyRepeatButtons = await evaluate(
   "document.querySelectorAll('.step-repeat-toggle, .step-seq-head').length",
 );

@@ -664,7 +664,7 @@ function TreeEntryView({
     return (
       <div
         className={`tree-sequence${isExpanded ? ' expanded' : ''}`}
-        style={{ boxShadow: `inset 4px 0 0 ${color}`, background: `${color}14` }}
+        style={{ background: foldBackground(color) }}
       >
         <button
           type="button"
@@ -707,7 +707,7 @@ function TreeEntryView({
     return (
       <div
         className={`tree-sequence tree-repeat-block${isExpanded ? ' expanded' : ''}`}
-        style={{ boxShadow: `inset 4px 0 0 ${color}`, background: `${color}14` }}
+        style={{ background: foldBackground(color) }}
       >
         <button
           type="button"
@@ -739,16 +739,6 @@ function TreeEntryView({
             />
           ))}
         </div>
-        {isExpanded && (
-          <button
-            type="button"
-            className="tree-collapse"
-            onClick={() => onToggle(entry.id)}
-            title={t(lang, 'tree.foldAgain')}
-          >
-            ×{entry.repeat} {t(lang, 'tree.collapse')}
-          </button>
-        )}
       </div>
     );
   }
@@ -779,6 +769,11 @@ const SEQUENCE_COLORS = ['#8fe0b8', '#8fb8e0', '#e8a87c', '#c9a0ff', '#ffd479', 
 
 function sequenceColor(level: number): string {
   return SEQUENCE_COLORS[level % SEQUENCE_COLORS.length];
+}
+
+/** Colored fold range drawn inside the block, leaving the tree guide line clean. */
+function foldBackground(color: string): string {
+  return `linear-gradient(90deg, transparent 5px, ${color} 5px, ${color} 9px, transparent 9px), ${color}12`;
 }
 
 interface StoryStep {
