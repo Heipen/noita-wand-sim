@@ -298,12 +298,12 @@ console.log('✓ visual effects excluded; drawing utility spells listed as modif
 
 await loadWand(['BLOOD_TO_POWER', 'LIGHT_BULLET']);
 await waitFor(
-  "[...document.querySelectorAll('.summary-mod-note')].some((el) => el.innerText.includes('44%'))",
+  "[...document.querySelectorAll('.summary-state-chip')].some((el) => el.innerText.includes('44%'))",
   60000,
-  'blood to power formula note',
+  'blood to power formula chip',
 );
 const bloodChips = await evaluate("[...document.querySelectorAll('.summary-state-chip')].map((el) => el.innerText)");
-if (bloodChips.some((text) => text.includes('投射物伤害 +44'))) {
+if (bloodChips.some((text) => /投射物伤害 \+44(?!%)/.test(text))) {
   throw new Error('Blood to Power should not show a fake fixed +44 damage: ' + JSON.stringify(bloodChips));
 }
 console.log('✓ Blood/Gold to Power use formula notes instead of fixed player stats');
@@ -323,11 +323,7 @@ const treeTotal = await evaluate("document.querySelector('.tree-total')?.innerTe
 if (!treeTotal.includes('800')) throw new Error('tree header should show the projectile total: ' + treeTotal);
 const query = await evaluate('location.search');
 if (!query.includes('DIVIDE_10')) throw new Error('share URL missing DIVIDE_10: ' + query);
-await waitFor(
-  "[...document.querySelectorAll('.summary-mod-note')].some((el) => el.innerText.includes('伤害'))",
-  10000,
-  'divide modifier note',
-);
+
 console.log('✓ divide-by-10 chain:', huge.replace(/\n/g, ' | '));
 
 // 4b) wiki example: D10 + DAMAGE + LIGHT_BULLET => 11 damage modifiers, one don't-draw copy

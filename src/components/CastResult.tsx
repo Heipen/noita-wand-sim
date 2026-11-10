@@ -341,8 +341,7 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
         // apply their shot-state changes to that projectile just like modifiers
         const castsIntoNext =
           spell?.type === 'modifier' ||
-          (spell?.type === 'utility' && node.children.some((child) => child.kind === 'drawBlock')) ||
-          /^DIVIDE_\d+$/.test(node.id);
+          (spell?.type === 'utility' && node.children.some((child) => child.kind === 'drawBlock'));
         if (castsIntoNext) {
           modifierCounts.set(node.id, (modifierCounts.get(node.id) ?? 0) + 1);
         }
@@ -543,22 +542,10 @@ function collectPowerFormulaDamage(tree: CastTreeNode): number {
   return total;
 }
 
-function signedNumber(value: number): string {
-  return value > 0 ? `+${formatNumber(value)}` : formatNumber(value);
-}
-
-function modifierNote(id: string, spell: SpellMeta | undefined, lang: Lang): string | null {
-  if (id === 'BLOOD_TO_POWER') return t(lang, 'summary.bloodToPower');
-  if (id === 'MONEY_MAGIC') return t(lang, 'summary.moneyMagic');
-  if (!spell || !/^DIVIDE_\d+$/.test(id)) return null;
-  const damage = Number(spell.stateDelta.damage_projectile_add ?? 0) * DAMAGE_DISPLAY_SCALE;
-  const cast = Number(spell.stateDelta.fire_rate_wait ?? 0) / 60;
-  const recharge = Number(spell.stateDelta.reload_time ?? 0) / 60;
-  return t(lang, 'summary.divideEffect', {
-    damage: signedNumber(damage),
-    cast: `${signedNumber(cast)}s`,
-    recharge: `${signedNumber(recharge)}s`,
-  });
+function powerFormulaSuffix(id: string, lang: Lang): string | null {
+  if (id === 'BLOOD_TO_POWER') return t(lang, 'summary.bloodToPowerSuffix');
+  if (id === 'MONEY_MAGIC') return t(lang, 'summary.moneyMagicSuffix');
+  return null;
 }
 
 function SummaryItemCard({
@@ -578,14 +565,29 @@ function SummaryItemCard({
 }) {
   const spell = maps.byEntity.get(item.entity);
   const projectileName = spellName(spell, entityLabel(item.entity), lang);
-  const stateChips = castState ? summaryStateChips(castState, lang) : [];
-  const modifierNotes = [
+  const stateChips = castState ? [...summaryStateChips(castState, lang)] : [];
+  const powerSuffixes = [
     ...new Set(
       item.modifiers
-        .map(([id]) => modifierNote(id, maps.byId.get(id), lang))
-        .filter((note): note is string => note !== null),
+        .map(([id]) => powerFormulaSuffix(id, lang))
+        .filter((suffix): suffix is string => suffix !== null),
     ),
   ];
+  if (powerSuffixes.length > 0) {
+    const damageIndex = stateChips.findIndex((chip) => chip.key === 'damage_projectile_add');
+    if (damageIndex >= 0) {
+      stateChips[damageIndex] = {
+        ...stateChips[damageIndex],
+        text: `${stateChips[damageIndex].text} ${powerSuffixes.join(' ')}`,
+      };
+    } else {
+      const [first, ...rest] = powerSuffixes;
+      stateChips.unshift({
+        key: 'damage_projectile_add',
+        text: `${t(lang, 'state.damage_projectile_add', { value: first })}${rest.length ? ` ${rest.join(' ')}` : ''}`,
+      });
+    }
+  }
 
   return (
     <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}`}>
@@ -612,15 +614,6 @@ function SummaryItemCard({
                 );
               })}
             </span>
-            {modifierNotes.length > 0 && (
-              <div className="summary-mod-notes">
-                {modifierNotes.map((note) => (
-                  <span className="summary-mod-note" key={note}>
-                    {note}
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         )}
       </div>
