@@ -3,7 +3,7 @@ import type { Lang, SpellType } from './types';
 type Dict = Record<string, string>;
 
 const zh: Dict = {
-  'app.title': 'Noita 魔杖模拟器',
+  'app.title': 'Noita 法杖模拟器',
   'app.subtitle': '直接运行游戏自带的施法逻辑，在浏览器里模拟你的魔杖',
   'app.langSwitch': 'EN',
   'header.feedback': 'Bug 反馈：heipen111@foxmail.com',
