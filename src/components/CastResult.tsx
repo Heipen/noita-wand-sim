@@ -1385,7 +1385,7 @@ function ShotCard({
           {t(lang, 'result.castDelay')} {formatFramesAsSeconds(shot.castDelayFrames)}s
         </span>
         <span className="shot-stat">
-          {t(lang, 'result.recharge')} {formatFramesAsSeconds(shot.reloadFrames)}s
+          {t(lang, 'result.recharge')} {formatFramesAsSeconds(shot.reloadTimeFrames ?? shot.reloadFrames)}s
         </span>
         {shot.reloaded && <span className="badge reloaded">{t(lang, 'result.reloaded')}</span>}
       </header>

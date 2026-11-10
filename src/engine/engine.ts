@@ -275,7 +275,9 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
     const json = evalString(`return __do_shot(${mana}, ${frame}, ${castDelayFrames})`, 'do_shot');
     const snapshot = JSON.parse(json) as Snapshot;
     const events = parseEvents(snapshot.events);
-    const reloadEvent = events.find((event) => event.type === 'reload');
+    // StartReload can be called more than once in a shot (e.g. CESSATION copied by
+    // DIVIDE_2); the last call is the one that determines the actual recharge time.
+    const reloadEvent = [...events].reverse().find((event) => event.type === 'reload');
     const block = buildCastBlock(events);
     block.castState = snapshot.castState;
     const shot: ShotResult = {

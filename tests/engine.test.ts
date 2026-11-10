@@ -167,6 +167,17 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(payload?.actions[0].delta?.fire_rate_wait).toBe(100);
   });
 
+  it('uses the last StartReload when DIVIDE_2 copies CESSATION twice', () => {
+    const shot = engine.simulate(
+      wand(['DIVIDE_2', 'CESSATION', 'LIGHT_BULLET'], { reload_time: 60, cast_delay: 60 }),
+      { mana: 1000 },
+    ).shots[0];
+    // each CESSATION execution adds +600; DIVIDE_2 restores current_reload_time afterwards,
+    // but the already-sent StartReload(1260) is what the game waits for
+    expect(shot.reloadTimeFrames).toBe(1260);
+    expect(shot.castDelayFrames).toBe(80);
+  });
+
   it('ADD_TRIGGER on BUCKSHOT gives one trigger per related projectile and draws payloads sequentially', () => {
     const shot = engine.simulate(wand(['ADD_TRIGGER', 'BUCKSHOT', 'BOMB']), { mana: 1000 }).shots[0];
     const outer = shot.block.projectiles;
