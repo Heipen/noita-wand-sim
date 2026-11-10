@@ -1559,8 +1559,25 @@ function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; 
   );
 }
 
-function collectStats(tree: CastTreeNode) {
-  let actions = 0;
+/** Root cast-block actions in execution order, grouped by spell (repeats merged). */
+function groupCastActions(tree: CastTreeNode, upToEvent: number | null): { id: string; count: number }[] {
+  const actions: { id: string; eventIndex?: number }[] = [];
+  const walk = (node: CastTreeNode) => {
+    if (node.kind === 'trigger') return;
+    if (node.kind === 'action') actions.push({ id: node.id, eventIndex: node.eventIndex });
+    node.children.forEach(walk);
+  };
+  walk(tree);
+
+  const counts = new Map<string, number>();
+  for (const action of actions) {
+    if (upToEvent !== null && (action.eventIndex === undefined || action.eventIndex > upToEvent)) continue;
+    counts.set(action.id, (counts.get(action.id) ?? 0) + 1);
+  }
+  return [...counts.entries()].map(([id, count]) => ({ id, count }));
+}
+
+function collectStats(tree: CastTreeNode) {  let actions = 0;
   let projectiles = 0;
   const walk = (node: CastTreeNode) => {
     if (node.kind === 'action') {
@@ -1642,6 +1659,10 @@ function ShotCard({
     }
     return found;
   }, [selectedEvent, shot.pileSteps]);
+  const castBlockGroups = useMemo(
+    () => groupCastActions(shot.tree, selectedEvent),
+    [shot.tree, selectedEvent],
+  );
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
   const grouped = useMemo(() => groupTree(shot.tree, foldRepeats), [shot.tree, foldRepeats]);
   // 施法过程暂时停用：保留全部实现，需要恢复时把 SHOW_CASTING_STEPS 改成 true。
@@ -1800,6 +1821,32 @@ function ShotCard({
             )}
           </h4>
           <p className="pile-note muted small">{t(lang, 'result.pilesClickHint')}</p>
+          {castBlockGroups.length > 0 && (
+            <div className="cast-block-preview">
+              <div className="cast-block-head">
+                <span>{t(lang, 'result.castBlock')}</span>
+                <span className="muted small">
+                  {t(lang, 'result.castBlockCount', {
+                    actions: castBlockGroups.reduce((sum, group) => sum + group.count, 0),
+                    kinds: castBlockGroups.length,
+                  })}
+                </span>
+              </div>
+              <div className="cast-block-chips">
+                {castBlockGroups.map(({ id, count }) => {
+                  const spell = maps.byId.get(id);
+                  const name = spellName(spell, id, lang);
+                  return (
+                    <span className="cast-block-chip" title={`${name} ×${count}`} key={id}>
+                      <SpellIcon spell={spell} data={data} />
+                      <span>{name}</span>
+                      {count > 1 && <b>×{count}</b>}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="piles-grid">
             <Pile title={t(lang, 'result.pileDeck')} ids={selectedPiles?.deck ?? shot.deck} data={data} lang={lang} maps={maps} />
             <Pile title={t(lang, 'result.pileHand')} ids={selectedPiles?.hand ?? shot.hand} data={data} lang={lang} maps={maps} />

@@ -1027,6 +1027,52 @@ main {
   font-size: 10px;
 }
 
+.cast-block-preview {
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.cast-block-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 5px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.cast-block-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.cast-block-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 1px 5px;
+  border: 1px solid #3e5570;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 10px;
+  color: #b9c8dd;
+}
+
+.cast-block-chip .mini-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.cast-block-chip b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .proj-node {
   margin-bottom: 4px;
 }

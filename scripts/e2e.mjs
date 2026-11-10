@@ -417,6 +417,10 @@ const wikiTree = await evaluate("document.querySelector('.shot-tree')?.innerText
 if (!wikiTree.includes('禁抽')) throw new Error('tree missing the don\'t-draw copy: ' + wikiTree.slice(0, 400));
 const repeatBadge = await evaluate("(document.querySelector('.tree-repeat')?.innerText || '')");
 if (!/×\d+/.test(repeatBadge)) throw new Error('tree should fold repeated siblings, got badge: ' + repeatBadge);
+const blockChips = await evaluate("[...document.querySelectorAll('.cast-block-chip')].map((el) => el.innerText)");
+if (!blockChips.some((text) => text.includes('伤害增强') && text.includes('×11'))) {
+  throw new Error('cast block preview should merge repeated spells: ' + JSON.stringify(blockChips));
+}
 console.log('✓ wiki preload example rendered: 11× 伤害增强, 禁抽, repeat folding');
 
 // 4c) Tau + divide chain: the first copied divide wipes the deck, the second copies nothing
