@@ -213,6 +213,9 @@ await evaluate("document.querySelector('.wand-sticky-toggle input').click(); tru
 await waitFor("getComputedStyle(document.querySelector('.wand-sticky')).position === 'static'", 10000, 'wand sticky off');
 await evaluate("document.querySelector('.wand-sticky-toggle input').click(); true");
 await waitFor("getComputedStyle(document.querySelector('.wand-sticky')).position === 'sticky'", 10000, 'wand sticky back on');
+const mobilePickerStyle = await evaluate(`(() => { const text = document.querySelector('.picker-grid .spell-text'); const tree = document.querySelector('.shot-tree'); return { text: text ? getComputedStyle(text).display : 'missing', treeMax: tree ? parseFloat(getComputedStyle(tree).maxHeight) : 0, viewport: window.innerHeight }; })()`);
+if (mobilePickerStyle.text !== 'none') throw new Error('mobile picker should hide spell names: ' + JSON.stringify(mobilePickerStyle));
+if (Math.abs(mobilePickerStyle.treeMax - mobilePickerStyle.viewport * 0.6) > 2) throw new Error('mobile tree max-height should be 60vh: ' + JSON.stringify(mobilePickerStyle));
 const mobileWandRows = await evaluate(`(() => {
   const slots = document.querySelector('.wand-slots');
   const tops = [...new Set([...slots.querySelectorAll('.wand-slot')].map((el) => Math.round(el.getBoundingClientRect().top)))];
@@ -367,6 +370,7 @@ if (!earlyDiscardPiles[1] || earlyDiscardPiles[1] <= 0) {
 if (!earlyDiscardPiles[2] || earlyDiscardPiles[2] <= 0) {
   throw new Error('early discard step should show the discarded card: ' + JSON.stringify(earlyDiscardPiles));
 }
+if ((await evaluate("document.querySelectorAll('.pile-chip.changed').length")) === 0) throw new Error('selected step should highlight changed spells');
 console.log('✓ early discard step is selectable with its own pile state');
 
 // count only real projectiles (the wand ghost's image emitter is a visual effect), and show
@@ -549,6 +553,9 @@ if (layoutInfo.compactBadges !== 0) throw new Error('compact spell cards should 
 if (layoutInfo.slotNumbers === 0) throw new Error('wand slots should be numbered');
 if (layoutInfo.summaryZones === 0) throw new Error('summary should separate projectile/modifier zones');
 if (layoutInfo.pileTexts !== 0) throw new Error('pile chips should be icons only');
+const desktopSummaryLayout = await evaluate(`(() => { const tree = document.querySelector('.shot-tree'); const grid = document.querySelector('.piles-grid'); const preview = document.querySelector('.cast-block-preview'); return { treeMax: tree ? getComputedStyle(tree).maxHeight : 'missing', previewBelowPiles: !preview || !grid || preview.getBoundingClientRect().top >= grid.getBoundingClientRect().bottom - 1 }; })()`);
+if (desktopSummaryLayout.treeMax !== 'none') throw new Error('desktop tree should have no max-height: ' + JSON.stringify(desktopSummaryLayout));
+if (!desktopSummaryLayout.previewBelowPiles) throw new Error('desktop cast actions should be below the discard pile: ' + JSON.stringify(desktopSummaryLayout));
 console.log('✓ compact picker, sticky spell bar, icon piles, summary zones');
 
 // 4e) capacity above 26, clearing keeps wand stats, saving a named preset

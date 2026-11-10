@@ -1012,8 +1012,8 @@ main {
 }
 
 .shot-tree {
-  max-height: min(100vh, 1080px);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
   padding-right: 4px;
 }
 
@@ -1055,12 +1055,35 @@ main {
   font-size: 10px;
 }
 
+.pile-chip.changed {
+  border-color: #f1c40f;
+  background: rgba(241, 196, 15, 0.16);
+  box-shadow: 0 0 0 1px rgba(241, 196, 15, 0.5);
+}
+
 .cast-block-preview {
   margin-bottom: 8px;
   padding: 6px 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.18);
+}
+
+@media (min-width: 861px) {
+  .piles {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .piles-grid {
+    order: 2;
+  }
+
+  .cast-block-preview {
+    order: 3;
+    margin-top: 8px;
+    margin-bottom: 0;
+  }
 }
 
 .cast-block-head {
@@ -1456,7 +1479,7 @@ main {
 /* evaluation tree */
 
 .shot-tree {
-  overflow: auto;
+  overflow: visible;
   min-width: 0;
 }
 
@@ -2102,7 +2125,7 @@ main {
   }
 
   .shot-tree {
-    max-height: 72vh;
+    max-height: 60vh;
     overflow: auto;
   }
 
@@ -2115,6 +2138,28 @@ main {
 @media (max-width: 860px) {
   .sim-layout {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .picker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
+    gap: 4px;
+  }
+
+  .picker-grid .spell-card {
+    justify-content: center;
+    padding: 5px;
+  }
+
+  .picker-grid .spell-text {
+    display: none;
+  }
+
+  .picker-grid .spell-icon {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
   }
 }
 

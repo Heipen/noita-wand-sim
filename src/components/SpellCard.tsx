@@ -29,6 +29,7 @@ export function SpellCard({ spell, data, lang, variant = 'picker', draggable = t
       type="button"
       className={`spell-card spell-card-${variant}`}
       data-spell-id={spell.id}
+      aria-label={title}
       draggable={draggable}
       onClick={() => onAdd?.(spell.id)}
       onDragStart={(event) => {

@@ -1537,7 +1537,43 @@ function buildStory(
 
 // --- shot card -----------------------------------------------------------------
 
-function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; data: GameData; lang: Lang; maps: SpellMaps }) {
+function countSpells(ids: string[]): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  return counts;
+}
+
+function changedSpellsBetween(
+  current: { deck: string[]; hand: string[]; discarded: string[] },
+  previous: { deck: string[]; hand: string[]; discarded: string[] } | null,
+): Set<string> {
+  const changed = new Set<string>();
+  if (!previous) return changed;
+  for (const key of ['deck', 'hand', 'discarded'] as const) {
+    const currentCounts = countSpells(current[key]);
+    const previousCounts = countSpells(previous[key]);
+    for (const id of new Set([...currentCounts.keys(), ...previousCounts.keys()])) {
+      if ((currentCounts.get(id) ?? 0) !== (previousCounts.get(id) ?? 0)) changed.add(id);
+    }
+  }
+  return changed;
+}
+
+function Pile({
+  title,
+  ids,
+  data,
+  lang,
+  maps,
+  changedIds,
+}: {
+  title: string;
+  ids: string[];
+  data: GameData;
+  lang: Lang;
+  maps: SpellMaps;
+  changedIds?: Set<string>;
+}) {
   return (
     <div className="pile">
       <div className="pile-title">
@@ -1549,7 +1585,12 @@ function Pile({ title, ids, data, lang, maps }: { title: string; ids: string[]; 
           const spell = maps.byId.get(id);
           const name = spellName(spell, id, lang);
           return (
-            <span className="pile-chip" key={`${id}-${index}`} title={name} aria-label={name}>
+            <span
+              className={`pile-chip${changedIds?.has(id) ? ' changed' : ''}`}
+              key={`${id}-${index}`}
+              title={name}
+              aria-label={name}
+            >
               <SpellIcon spell={spell} data={data} />
             </span>
           );
@@ -1689,6 +1730,19 @@ function ShotCard({
     }
     return found;
   }, [selectedEvent, shot.pileSteps]);
+  const selectedPileIndex = selectedPiles
+    ? shot.pileSteps.findIndex((step) => step.eventIndex === selectedPiles.eventIndex)
+    : -1;
+  const changedIds = useMemo(
+    () =>
+      selectedPiles
+        ? changedSpellsBetween(
+            selectedPiles,
+            selectedPileIndex > 0 ? shot.pileSteps[selectedPileIndex - 1] : null,
+          )
+        : new Set<string>(),
+    [selectedPiles, selectedPileIndex, shot.pileSteps],
+  );
   const castBlockGroups = useMemo(
     () => groupCastBlocks(shot.tree, selectedEvent),
     [shot.tree, selectedEvent],
@@ -1886,14 +1940,15 @@ function ShotCard({
             </div>
           )}
           <div className="piles-grid">
-            <Pile title={t(lang, 'result.pileDeck')} ids={selectedPiles?.deck ?? shot.deck} data={data} lang={lang} maps={maps} />
-            <Pile title={t(lang, 'result.pileHand')} ids={selectedPiles?.hand ?? shot.hand} data={data} lang={lang} maps={maps} />
+            <Pile title={t(lang, 'result.pileDeck')} ids={selectedPiles?.deck ?? shot.deck} data={data} lang={lang} maps={maps} changedIds={changedIds} />
+            <Pile title={t(lang, 'result.pileHand')} ids={selectedPiles?.hand ?? shot.hand} data={data} lang={lang} maps={maps} changedIds={changedIds} />
             <Pile
               title={t(lang, 'result.pileDiscard')}
               ids={selectedPiles?.discarded ?? shot.discarded}
               data={data}
               lang={lang}
               maps={maps}
+              changedIds={changedIds}
             />
             {!selectedPiles && showCastDiscards && castDiscards.length > 0 && (
               <div className="cast-discards">
