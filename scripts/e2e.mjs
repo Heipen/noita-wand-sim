@@ -140,6 +140,21 @@ if (footerInfo.mail !== 'mailto:heipen111@foxmail.com') throw new Error('footer 
 if (!footerInfo.text.includes('DSH') || !footerInfo.text.includes('Star')) throw new Error('footer attribution/star note missing: ' + footerInfo.text);
 if (!footerInfo.icon.endsWith('/favicon.png')) throw new Error('digger favicon missing: ' + JSON.stringify(footerInfo));
 
+// 1b) community aliases are searchable
+const setSearch = `(value) => {
+  const input = document.querySelector('.toolbar .search');
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  setter.call(input, value);
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+}`;
+await evaluate(`(${setSearch})('遁入虚空'); true`);
+await waitFor("document.querySelectorAll('.spell-card').length === 1 && document.querySelector('.spell-card')?.dataset.spellId === 'CESSATION'", 10000, 'alias search');
+await evaluate(`(${setSearch})('红拳'); true`);
+await waitFor("document.querySelector('.spell-card')?.dataset.spellId === 'DAMAGE'", 10000, 'community alias search');
+await evaluate(`(${setSearch})(''); true`);
+await waitFor("document.querySelectorAll('.spell-card').length > 400", 10000, 'alias search cleared');
+console.log('✓ community aliases are searchable');
+
 // 2) default trigger wand -> cast tree (worker engine)
 const shotText = await waitFor("document.querySelector('.shot-card')?.innerText || ''", 60000, 'first shot');
 console.log('✓ cast tree:', (await evaluate("document.querySelector('.shot-tree')?.innerText")).replace(/\n/g, ' | '));

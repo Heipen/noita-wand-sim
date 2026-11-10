@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
 import { t } from '../lib/i18n';
 import type { GameData, Lang, SpellType } from '../lib/types';
+import spellAliases from '../data/spellAliases.json';
 import { Toolbar } from './Toolbar';
 import { SpellCard, type HoverHandlers } from './SpellCard';
+
+const ALIASES = spellAliases as Record<string, string[]>;
 
 interface Props {
   data: GameData;
@@ -26,15 +29,22 @@ export function SpellPicker({
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const compactQ = q.replace(/\s+/g, '');
     return data.spells.filter((spell) => {
       if (typeFilter !== 'all' && spell.type !== typeFilter) return false;
       if (!q) return true;
-      return (
+      if (
         spell.id.toLowerCase().includes(q) ||
         spell.nameEn.toLowerCase().includes(q) ||
         spell.nameZh.includes(q) ||
         spell.displayZh.includes(q)
-      );
+      ) {
+        return true;
+      }
+      return (ALIASES[spell.id] ?? []).some((alias) => {
+        const lowered = alias.toLowerCase();
+        return lowered.includes(q) || lowered.replace(/\s+/g, '').includes(compactQ);
+      });
     });
   }, [data.spells, query, typeFilter]);
 
