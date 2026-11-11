@@ -59,13 +59,14 @@ describe('wand helpers', () => {
     expect(setAlwaysCast(wand, 9, 'BOMB')).toBe(wand); // out of range is ignored
   });
 
-  it('shifts all spells left/right while keeping empty slots in place', () => {
+  it('shifts every wand slot left/right, including empty slots', () => {
     let wand = createEmptyWand();
+    wand.capacity = 5;
     wand = placeSpell(wand, 0, 'LIGHT_BULLET');
     wand = placeSpell(wand, 2, 'BOMB');
     wand = placeSpell(wand, 4, 'DAMAGE');
-    expect(wandSlots(shiftSpells(wand, -1)).slice(0, 5)).toEqual(['BOMB', null, 'DAMAGE', null, 'LIGHT_BULLET']);
-    expect(wandSlots(shiftSpells(wand, 1)).slice(0, 5)).toEqual(['DAMAGE', null, 'LIGHT_BULLET', null, 'BOMB']);
+    expect(wandSlots(shiftSpells(wand, -1)).slice(0, 5)).toEqual([null, 'BOMB', null, 'DAMAGE', 'LIGHT_BULLET']);
+    expect(wandSlots(shiftSpells(wand, 1)).slice(0, 5)).toEqual(['DAMAGE', 'LIGHT_BULLET', null, 'BOMB', null]);
   });
 
   it('clamps capacity and action counts', () => {
