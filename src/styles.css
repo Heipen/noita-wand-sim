@@ -781,8 +781,23 @@ main {
 .picker-grid {
   margin-top: 10px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(126px, 1fr));
-  gap: 3px;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 4px;
+}
+
+.picker-grid .spell-card {
+  justify-content: center;
+  padding: 5px;
+}
+
+.picker-grid .spell-text {
+  display: none;
+}
+
+.picker-grid .spell-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
 }
 
 .spell-card {
@@ -2144,28 +2159,6 @@ main {
 @media (max-width: 860px) {
   .sim-layout {
     grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (max-width: 640px) {
-  .picker-grid {
-    grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-    gap: 4px;
-  }
-
-  .picker-grid .spell-card {
-    justify-content: center;
-    padding: 5px;
-  }
-
-  .picker-grid .spell-text {
-    display: none;
-  }
-
-  .picker-grid .spell-icon {
-    width: 32px;
-    height: 32px;
-    flex: 0 0 32px;
   }
 }
 
