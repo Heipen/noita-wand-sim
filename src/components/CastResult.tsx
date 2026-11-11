@@ -1930,11 +1930,6 @@ function ShotCard({
                 {t(lang, 'tree.totalProjectiles', { n: stats.projectiles })}
               </span>
             )}
-            {remainingDraws !== null && (
-              <span className="tree-remaining-draw">
-                {t(lang, 'tree.remainingDraws', { n: remainingDraws })}
-              </span>
-            )}
           </h4>
           {treeOpen &&
             (stats.actions === 0 ? (
@@ -1974,6 +1969,11 @@ function ShotCard({
             <div className="cast-block-preview">
               <div className="cast-block-head">
                 <span>{t(lang, 'result.castBlock')}</span>
+                {remainingDraws !== null && (
+                  <span className="tree-remaining-draw">
+                    {t(lang, 'tree.remainingDraws', { n: remainingDraws })}
+                  </span>
+                )}
               </div>
               {castBlockGroups.map((block, blockIndex) => (
                 <div
