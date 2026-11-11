@@ -1070,6 +1070,14 @@ main {
   flex-wrap: wrap;
 }
 
+.tree-remaining-draw {
+  font-size: 11px;
+  color: #f0b354;
+  border: 1px solid #5a4a22;
+  border-radius: 999px;
+  padding: 0 7px;
+}
+
 .piles-reset {
   padding: 1px 6px;
   font-size: 10px;

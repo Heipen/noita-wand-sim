@@ -1673,6 +1673,23 @@ function groupCastBlocks(tree: CastTreeNode, upToEvent: number | null): CastBloc
   return [...(root.length > 0 ? [{ root: true, actions: root }] : []), ...payloadBlocks];
 }
 
+/** Remaining cards in the innermost active draw block at a given event. */
+function remainingDrawsAt(events: EngineEvent[], eventIndex: number): number | null {
+  const stack: number[] = [];
+  for (let i = 0; i <= eventIndex && i < events.length; i++) {
+    const event = events[i];
+    if (event.type === 'drawBlockBegin') {
+      stack.push(event.count);
+    } else if (event.type === 'drawCard') {
+      const top = stack.length - 1;
+      if (top >= 0) stack[top] = Math.max(0, stack[top] - 1);
+    } else if (event.type === 'drawBlockEnd') {
+      stack.pop();
+    }
+  }
+  return stack.length > 0 ? stack[stack.length - 1] : null;
+}
+
 function collectStats(tree: CastTreeNode) {  let actions = 0;
   let projectiles = 0;
   const walk = (node: CastTreeNode) => {
@@ -1787,6 +1804,10 @@ function ShotCard({
     return changed;
   }, [castBlockGroups, shot.tree, selectedEvent]);
   const stats = useMemo(() => collectStats(shot.tree), [shot.tree]);
+  const remainingDraws = useMemo(
+    () => (selectedEvent === null ? null : remainingDrawsAt(shot.events, selectedEvent)),
+    [selectedEvent, shot.events],
+  );
   const grouped = useMemo(() => groupTree(shot.tree, foldRepeats), [shot.tree, foldRepeats]);
   // 施法过程暂时停用：保留全部实现，需要恢复时把 SHOW_CASTING_STEPS 改成 true。
   const storyTree = useMemo(
@@ -1907,6 +1928,11 @@ function ShotCard({
             {stats.projectiles > 0 && (
               <span className="tree-total">
                 {t(lang, 'tree.totalProjectiles', { n: stats.projectiles })}
+              </span>
+            )}
+            {remainingDraws !== null && (
+              <span className="tree-remaining-draw">
+                {t(lang, 'tree.remainingDraws', { n: remainingDraws })}
               </span>
             )}
           </h4>
