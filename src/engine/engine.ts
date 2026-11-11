@@ -351,7 +351,8 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
         'setup_entities',
       );
 
-      const spells = wand.spells.map((id) => (id ? { id, uses: null } : null));
+      const zeroUses = new Set(options.zeroUses ?? []);
+      const spells = wand.spells.map((id) => (id ? { id, uses: zeroUses.has(id) ? 0 : null } : null));
       const always = (wand.always_cast ?? []).map((id) => id ?? null);
       run(
         `__prepare_wand(${toLuaLiteral({

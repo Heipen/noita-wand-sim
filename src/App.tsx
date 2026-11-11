@@ -38,6 +38,7 @@ const PREFER_LOCAL_KEY = 'noita-wand-sim.preferLocal';
 const PRESETS_KEY = 'noita-wand-sim.presets';
 const ALWAYS_CAST_KEY = 'noita-wand-sim.alwaysCast';
 const WAND_STICKY_KEY = 'noita-wand-sim.wandSticky';
+const ZERO_USES_KEY = 'noita-wand-sim.zeroUses';
 
 type Phase = 'boot' | 'empty' | 'loading' | 'ready';
 type SimMode = 'single' | 'untilReload';
@@ -65,6 +66,14 @@ function readWandStickyEnabled(): boolean {
     return localStorage.getItem(WAND_STICKY_KEY) !== '0';
   } catch {
     return true;
+  }
+}
+
+function readZeroUsesEnabled(): boolean {
+  try {
+    return localStorage.getItem(ZERO_USES_KEY) === '1';
+  } catch {
+    return false;
   }
 }
 
@@ -141,6 +150,7 @@ export default function App() {
   const [wand, setWand] = useState<WandState>(readInitialWand);
   const [alwaysCastEnabled, setAlwaysCastEnabled] = useState(readAlwaysCastEnabled);
   const [wandStickyEnabled, setWandStickyEnabled] = useState(readWandStickyEnabled);
+  const [zeroUsesEnabled, setZeroUsesEnabled] = useState(readZeroUsesEnabled);
   const [spellTarget, setSpellTarget] = useState<SpellTarget | null>(null);
   const [isMobile] = useState(
     () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent),
@@ -178,6 +188,22 @@ export default function App() {
       /* ignore */
     }
   }, [wandStickyEnabled]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ZERO_USES_KEY, zeroUsesEnabled ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [zeroUsesEnabled]);
+
+  const limitedSpellIds = useMemo(
+    () =>
+      (data?.spells ?? [])
+        .filter((spell) => spell.maxUses !== null && spell.maxUses > 0)
+        .map((spell) => spell.id),
+    [data],
+  );
 
   // Keep the sticky pile panel below the sticky wand bar.
   useEffect(() => {
@@ -306,6 +332,7 @@ export default function App() {
         mana: wand.manaMax,
         frame: 0,
         worldSeed: 0,
+        zeroUses: zeroUsesEnabled ? limitedSpellIds : undefined,
       })
         .then((simulation) => {
           if (!cancelled) setResult(simulation);
@@ -321,7 +348,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [phase, data, wand, mode, alwaysCastEnabled]);
+  }, [phase, data, wand, mode, alwaysCastEnabled, zeroUsesEnabled, limitedSpellIds]);
 
   // Keep the URL shareable at all times.
   useEffect(() => {
@@ -506,6 +533,8 @@ export default function App() {
                 onAlwaysCastToggle={setAlwaysCastEnabled}
                 wandStickyEnabled={wandStickyEnabled}
                 onWandStickyToggle={setWandStickyEnabled}
+                zeroUsesEnabled={zeroUsesEnabled}
+                onZeroUsesToggle={setZeroUsesEnabled}
                 isMobile={isMobile}
                 spellTarget={spellTarget}
                 onSlotTarget={isMobile ? chooseSpellTarget : undefined}

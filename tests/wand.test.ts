@@ -9,6 +9,7 @@ import {
   firstEmptySlot,
   placeSpell,
   setAlwaysCast,
+  shiftSpells,
   swapSlots,
   toEngineWand,
   wandSlots,
@@ -56,6 +57,15 @@ describe('wand helpers', () => {
     const wand = setAlwaysCast(createEmptyWand(), 1, 'DAMAGE');
     expect(wand.alwaysCast[1]).toBe('DAMAGE');
     expect(setAlwaysCast(wand, 9, 'BOMB')).toBe(wand); // out of range is ignored
+  });
+
+  it('shifts all spells left/right while keeping empty slots in place', () => {
+    let wand = createEmptyWand();
+    wand = placeSpell(wand, 0, 'LIGHT_BULLET');
+    wand = placeSpell(wand, 2, 'BOMB');
+    wand = placeSpell(wand, 4, 'DAMAGE');
+    expect(wandSlots(shiftSpells(wand, -1)).slice(0, 5)).toEqual(['BOMB', null, 'DAMAGE', null, 'LIGHT_BULLET']);
+    expect(wandSlots(shiftSpells(wand, 1)).slice(0, 5)).toEqual(['DAMAGE', null, 'LIGHT_BULLET', null, 'BOMB']);
   });
 
   it('clamps capacity and action counts', () => {

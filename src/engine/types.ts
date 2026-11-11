@@ -199,6 +199,8 @@ export interface SimulateOptions {
   extraWands?: ExtraWand[];
   /** World conditions for toggled spells (IF_ENEMY / IF_HP / ...). */
   requirements?: RequirementOptions;
+  /** Spell ids whose remaining uses should start at 0 (exhausted cards). */
+  zeroUses?: string[];
   /** Stop after the wand reloads (like the old simulator's "cast until reload"). */
   untilReload?: boolean;
   /** Safety limit for untilReload mode. */

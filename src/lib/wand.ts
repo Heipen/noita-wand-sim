@@ -109,6 +109,28 @@ export function swapSlots(wand: WandState, from: number, to: number): WandState 
   return normalizeWand({ ...wand, spells });
 }
 
+/** Rotate the non-empty spells left/right while keeping empty slots in place. */
+export function shiftSpells(wand: WandState, direction: -1 | 1): WandState {
+  const positions: number[] = [];
+  const ids: string[] = [];
+  wand.spells.forEach((id, index) => {
+    if (id) {
+      positions.push(index);
+      ids.push(id);
+    }
+  });
+  if (ids.length < 2) return wand;
+  const shifted =
+    direction < 0
+      ? [...ids.slice(1), ...ids.slice(0, 1)]
+      : [...ids.slice(-1), ...ids.slice(0, -1)];
+  const spells = [...wand.spells];
+  positions.forEach((position, index) => {
+    spells[position] = shifted[index];
+  });
+  return normalizeWand({ ...wand, spells });
+}
+
 export function firstEmptySlot(wand: WandState): number {
   const slots = wandSlots(wand);
   return slots.findIndex((slot) => slot === null);

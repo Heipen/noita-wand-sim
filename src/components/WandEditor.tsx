@@ -10,6 +10,7 @@ import {
   normalizeWand,
   placeSpell,
   setAlwaysCast,
+  shiftSpells,
   swapSlots,
   wandSlots,
   MAX_ALWAYS_CAST,
@@ -44,6 +45,8 @@ interface Props {
   onAlwaysCastToggle: (enabled: boolean) => void;
   wandStickyEnabled: boolean;
   onWandStickyToggle: (enabled: boolean) => void;
+  zeroUsesEnabled: boolean;
+  onZeroUsesToggle: (enabled: boolean) => void;
   isMobile: boolean;
   spellTarget?: SpellTarget | null;
   onSlotTarget?: (kind: SpellTarget['kind'], index: number) => void;
@@ -129,6 +132,8 @@ export function WandEditor({
   onAlwaysCastToggle,
   wandStickyEnabled,
   onWandStickyToggle,
+  zeroUsesEnabled,
+  onZeroUsesToggle,
   isMobile,
   spellTarget = null,
   onSlotTarget,
@@ -339,6 +344,32 @@ export function WandEditor({
           >
             {t(lang, 'editor.clear')}
           </button>
+          <button
+            type="button"
+            className="secondary small"
+            title={t(lang, 'editor.shiftLeft')}
+            disabled={used < 2}
+            onClick={() => onChange(shiftSpells(wand, -1))}
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            className="secondary small"
+            title={t(lang, 'editor.shiftRight')}
+            disabled={used < 2}
+            onClick={() => onChange(shiftSpells(wand, 1))}
+          >
+            →
+          </button>
+          <label className="field checkbox-field zero-uses-toggle">
+            <input
+              type="checkbox"
+              checked={zeroUsesEnabled}
+              onChange={(event) => onZeroUsesToggle(event.target.checked)}
+            />
+            <span className="field-label">{t(lang, 'editor.zeroUses')}</span>
+          </label>
           <label className="field checkbox-field always-toggle">
             <input
               type="checkbox"

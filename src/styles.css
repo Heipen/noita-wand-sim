@@ -664,7 +664,8 @@ main {
   display: block;
 }
 
-.always-toggle {
+.always-toggle,
+.zero-uses-toggle {
   align-items: center;
   font-size: 12px;
   color: var(--muted);
