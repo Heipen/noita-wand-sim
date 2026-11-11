@@ -1,6 +1,6 @@
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { CastTreeNode, EngineEvent, ShotResult, SimulationResult } from '../engine/types';
+import type { CastTreeNode, EngineEvent, RequirementOptions, ShotResult, SimulationResult } from '../engine/types';
 import { DAMAGE_DISPLAY_SCALE, formatFramesAsSeconds, formatNumber } from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
 import { t } from '../lib/i18n';
@@ -12,6 +12,8 @@ interface Props {
   lang: Lang;
   mode: 'single' | 'untilReload';
   onModeChange: (mode: 'single' | 'untilReload') => void;
+  requirements: RequirementOptions;
+  onRequirementsChange: (patch: Partial<RequirementOptions>) => void;
   simulating: boolean;
   error: string | null;
   /** Wand slots (0-based) used to label each spell with its wand number. */
@@ -2034,6 +2036,8 @@ export function CastResult({
   lang,
   mode,
   onModeChange,
+  requirements,
+  onRequirementsChange,
   simulating,
   error,
   wandSpells,
@@ -2048,6 +2052,7 @@ export function CastResult({
     }),
     [wandSpells],
   );
+  const hasConditionalSpells = wandSpells.some((id) => id?.startsWith('IF_'));
 
   return (
     <section className="panel cast-result">
@@ -2065,6 +2070,35 @@ export function CastResult({
             </button>
           ))}
         </div>
+        {hasConditionalSpells && (
+          <div className="condition-switch" title={t(lang, 'condition.hint')}>
+            <span className="condition-title">{t(lang, 'condition.title')}</span>
+            <label>
+              <input
+                type="checkbox"
+                checked={requirements.enemies === true}
+                onChange={(event) => onRequirementsChange({ enemies: event.target.checked })}
+              />
+              {t(lang, 'condition.enemies')}
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={requirements.projectiles === true}
+                onChange={(event) => onRequirementsChange({ projectiles: event.target.checked })}
+              />
+              {t(lang, 'condition.projectiles')}
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={requirements.hp === true}
+                onChange={(event) => onRequirementsChange({ hp: event.target.checked })}
+              />
+              {t(lang, 'condition.lowHp')}
+            </label>
+          </div>
+        )}
         <label className="deltas-toggle">
           <input
             type="checkbox"

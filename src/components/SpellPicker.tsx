@@ -54,7 +54,7 @@ export function SpellPicker({ data, lang, hover, onAdd }: Props) {
   };
 
   return (
-    <section className="panel spell-picker">
+    <section className={`panel spell-picker${collapsed ? ' spell-picker-collapsed' : ''}`}>
       <header className="panel-header">
         <h2>
           <button

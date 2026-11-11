@@ -175,6 +175,8 @@ console.log('✓ search and type filter are mutually exclusive');
 if (!(await evaluate("!!document.querySelector('.picker-toggle')"))) throw new Error('picker collapse toggle missing');
 await evaluate("document.querySelector('.picker-toggle').click(); true");
 await waitFor("!document.querySelector('.picker-grid')", 10000, 'picker collapsed');
+const collapsedPickerHeight = await evaluate("document.querySelector('.spell-picker')?.getBoundingClientRect().height || 0");
+if (collapsedPickerHeight > 100) throw new Error('collapsed picker should not keep its old height: ' + collapsedPickerHeight);
 await evaluate("document.querySelector('.picker-toggle').click(); true");
 await waitFor("!!document.querySelector('.picker-grid')", 10000, 'picker expanded');
 console.log('✓ spell picker collapse/expand');
@@ -375,6 +377,15 @@ await loadWand(['BOMB']);
 await waitFor("document.querySelectorAll('.summary-proj').length === 1", 60000, 'unlimited-capable spell remains');
 await evaluate("document.querySelector('.zero-uses-toggle input').click(); true");
 console.log('✓ zero uses only applies to never-unlimited spells');
+
+// IF_ requirement spells use the scene-condition controls
+await loadWand(['IF_ENEMY', 'LIGHT_BULLET', 'BOMB']);
+await waitFor("!!document.querySelector('.condition-switch')", 60000, 'condition controls');
+await waitFor("[...document.querySelectorAll('.summary-proj')].some((el) => (el.title || '').includes('炸弹'))", 60000, 'condition false result');
+await evaluate("document.querySelector('.condition-switch input').click(); true");
+await waitFor("[...document.querySelectorAll('.summary-proj')].some((el) => (el.title || '').includes('火花弹'))", 60000, 'condition true result');
+await evaluate("document.querySelector('.condition-switch input').click(); true");
+console.log('✓ IF_ condition toggles change the simulated result');
 
 // end-of-cast hand flush: discard step must show the card already in discard and hand empty
 await loadWand(['BURST_3', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET'], { capacity: 4 });

@@ -151,6 +151,7 @@ export default function App() {
   const [alwaysCastEnabled, setAlwaysCastEnabled] = useState(readAlwaysCastEnabled);
   const [wandStickyEnabled, setWandStickyEnabled] = useState(readWandStickyEnabled);
   const [zeroUsesEnabled, setZeroUsesEnabled] = useState(readZeroUsesEnabled);
+  const [requirements, setRequirements] = useState({ enemies: false, projectiles: false, hp: false });
   const [spellTarget, setSpellTarget] = useState<SpellTarget | null>(null);
   const [isMobile] = useState(
     () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent),
@@ -333,6 +334,7 @@ export default function App() {
         frame: 0,
         worldSeed: 0,
         zeroUses: zeroUsesEnabled ? limitedSpellIds : undefined,
+        requirements,
       })
         .then((simulation) => {
           if (!cancelled) setResult(simulation);
@@ -348,7 +350,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(handle);
     };
-  }, [phase, data, wand, mode, alwaysCastEnabled, zeroUsesEnabled, limitedSpellIds]);
+  }, [phase, data, wand, mode, alwaysCastEnabled, zeroUsesEnabled, limitedSpellIds, requirements]);
 
   // Keep the URL shareable at all times.
   useEffect(() => {
@@ -551,6 +553,8 @@ export default function App() {
                 lang={lang}
                 mode={mode}
                 onModeChange={setMode}
+                requirements={requirements}
+                onRequirementsChange={(patch) => setRequirements((previous) => ({ ...previous, ...patch }))}
                 simulating={simulating}
                 error={simError}
                 wandSpells={wand.spells.slice(0, wand.capacity)}

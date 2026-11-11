@@ -779,6 +779,10 @@ main {
   min-height: 320px;
 }
 
+.spell-picker.spell-picker-collapsed {
+  min-height: 0;
+}
+
 .picker-grid {
   margin-top: 10px;
   display: grid;
@@ -1798,6 +1802,26 @@ main {
 .picker-toggle {
   font-size: 16px;
   font-weight: 700;
+  color: var(--text);
+}
+
+.condition-switch {
+  display: flex;
+  align-items: center;
+  gap: 6px 10px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.condition-switch label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.condition-title {
   color: var(--text);
 }
 
