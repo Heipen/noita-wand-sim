@@ -380,15 +380,10 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
         const maxShots = options.maxShots ?? 50;
         for (let i = 0; i < maxShots; i++) {
           const { shot } = doShot(wand, mana, frame, castDelayWand);
-          const actionCount = shot.events.filter((event) => event.type === 'action').length;
-          // A cast after the deck is already exhausted is not a real extra use; only
-          // keep a completely empty shot when it is the first (and only) result.
-          if (actionCount === 0) {
-            if (shots.length === 0) shots.push(shot);
-            break;
-          }
           shots.push(shot);
           if (shot.reloaded) break;
+          const actionCount = shot.events.filter((event) => event.type === 'action').length;
+          if (actionCount === 0) break;
           mana = shot.manaAfter;
         }
       } else {
