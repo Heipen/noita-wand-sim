@@ -171,6 +171,14 @@ await evaluate(`(${setTypeFilter})('all'); true`);
 await waitFor("document.querySelectorAll('.spell-card').length > 400", 10000, 'type filter reset');
 console.log('✓ search and type filter are mutually exclusive');
 
+// spell picker panel can be collapsed and expanded
+if (!(await evaluate("!!document.querySelector('.picker-toggle')"))) throw new Error('picker collapse toggle missing');
+await evaluate("document.querySelector('.picker-toggle').click(); true");
+await waitFor("!document.querySelector('.picker-grid')", 10000, 'picker collapsed');
+await evaluate("document.querySelector('.picker-toggle').click(); true");
+await waitFor("!!document.querySelector('.picker-grid')", 10000, 'picker expanded');
+console.log('✓ spell picker collapse/expand');
+
 // 2) default trigger wand -> cast tree (worker engine)
 const shotText = await waitFor("document.querySelector('.shot-card')?.innerText || ''", 60000, 'first shot');
 console.log('✓ cast tree:', (await evaluate("document.querySelector('.shot-tree')?.innerText")).replace(/\n/g, ' | '));
@@ -358,6 +366,16 @@ const pilesReset = await evaluate("document.querySelector('.piles-grid')?.innerT
 if (pilesReset !== pilesBefore) throw new Error('reset should restore the end-of-cast piles');
 console.log('✓ tree step click shows per-step piles and resets');
 
+// zero uses only affects spells that cannot be made unlimited by the perk
+await loadWand(['BLACK_HOLE']);
+await waitFor("document.querySelectorAll('.summary-proj').length === 1", 60000, 'black hole projectile');
+await evaluate("document.querySelector('.zero-uses-toggle input').click(); true");
+await waitFor("document.querySelectorAll('.summary-proj').length === 0", 60000, 'zero uses discards never-unlimited spell');
+await loadWand(['BOMB']);
+await waitFor("document.querySelectorAll('.summary-proj').length === 1", 60000, 'unlimited-capable spell remains');
+await evaluate("document.querySelector('.zero-uses-toggle input').click(); true");
+console.log('✓ zero uses only applies to never-unlimited spells');
+
 // end-of-cast hand flush: discard step must show the card already in discard and hand empty
 await loadWand(['BURST_3', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET'], { capacity: 4 });
 await waitFor("!!document.querySelector('.tree-discard[data-event-index]')", 60000, 'discard step');
@@ -527,10 +545,10 @@ if (unfoldedNodes <= foldedNodes) throw new Error('unfolding repeats should show
 if ((await evaluate("document.querySelectorAll('.tree-repeat').length")) !== 0) throw new Error('repeat badges should disappear when unfolded');
 await evaluate("document.querySelector('input[data-toggle=fold]').click(); true");
 await sleep(300);
-await evaluate("document.querySelector('.section-toggle').click(); true");
+await evaluate("document.querySelector('.shot-tree .section-toggle').click(); true");
 await sleep(200);
 if ((await evaluate("document.querySelectorAll('.tree-root').length")) !== 0) throw new Error('tree should collapse entirely');
-await evaluate("document.querySelector('.section-toggle').click(); true");
+await evaluate("document.querySelector('.shot-tree .section-toggle').click(); true");
 await sleep(200);
 if ((await evaluate("document.querySelectorAll('.tree-root').length")) === 0) throw new Error('tree should expand again');
 console.log('✓ repeat folding toggle and whole-tree collapse work');

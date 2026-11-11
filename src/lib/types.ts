@@ -58,6 +58,8 @@ export interface RawSpell {
   spawnProbability: string | null;
   spawnManualUnlock: boolean;
   isDangerousBlast: boolean;
+  /** Cannot be made unlimited by the Unlimited Spells perk. */
+  neverUnlimited: boolean;
   /** Reflection pass: this spell's contribution to cast delay, in frames. */
   castDelayFrames: number;
   /** Reflection pass: this spell's contribution to recharge time, in frames. */

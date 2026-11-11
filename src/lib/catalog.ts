@@ -246,6 +246,7 @@ function toRawSpell(a: Record<string, any>): RawSpell {
     spawnProbability: typeof a.spawn_probability === 'string' ? a.spawn_probability : null,
     spawnManualUnlock: a.spawn_manual_unlock === true,
     isDangerousBlast: a.is_dangerous_blast === true,
+    neverUnlimited: a.never_unlimited === true,
     // filled from the reflection pass below
     castDelayFrames: 0,
     reloadFrames: 0,

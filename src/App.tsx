@@ -200,7 +200,7 @@ export default function App() {
   const limitedSpellIds = useMemo(
     () =>
       (data?.spells ?? [])
-        .filter((spell) => spell.maxUses !== null && spell.maxUses > 0)
+        .filter((spell) => spell.maxUses !== null && spell.maxUses > 0 && spell.neverUnlimited)
         .map((spell) => spell.id),
     [data],
   );

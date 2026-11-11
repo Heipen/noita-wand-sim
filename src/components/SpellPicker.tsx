@@ -17,6 +17,7 @@ interface Props {
 export function SpellPicker({ data, lang, hover, onAdd }: Props) {
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<SpellType | 'all'>('all');
+  const [collapsed, setCollapsed] = useState(false);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -55,31 +56,45 @@ export function SpellPicker({ data, lang, hover, onAdd }: Props) {
   return (
     <section className="panel spell-picker">
       <header className="panel-header">
-        <h2>{t(lang, 'picker.title')}</h2>
+        <h2>
+          <button
+            type="button"
+            className="section-toggle picker-toggle"
+            aria-expanded={!collapsed}
+            title={t(lang, collapsed ? 'picker.expand' : 'picker.collapse')}
+            onClick={() => setCollapsed((value) => !value)}
+          >
+            {collapsed ? '▸' : '▾'} {t(lang, 'picker.title')}
+          </button>
+        </h2>
         <span className="panel-sub">{t(lang, 'picker.hint')}</span>
       </header>
-      <Toolbar
-        lang={lang}
-        query={query}
-        typeFilter={typeFilter}
-        shown={filtered.length}
-        total={data.spells.length}
-        onQueryChange={changeQuery}
-        onTypeChange={changeType}
-      />
-      <div className="picker-grid">
-        {filtered.map((spell) => (
-          <SpellCard
-            key={spell.id}
-            spell={spell}
-            data={data}
+      {!collapsed && (
+        <>
+          <Toolbar
             lang={lang}
-            variant="compact"
-            hover={hover}
-            onAdd={onAdd}
+            query={query}
+            typeFilter={typeFilter}
+            shown={filtered.length}
+            total={data.spells.length}
+            onQueryChange={changeQuery}
+            onTypeChange={changeType}
           />
-        ))}
-      </div>
+          <div className="picker-grid">
+            {filtered.map((spell) => (
+              <SpellCard
+                key={spell.id}
+                spell={spell}
+                data={data}
+                lang={lang}
+                variant="compact"
+                hover={hover}
+                onAdd={onAdd}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </section>
   );
 }

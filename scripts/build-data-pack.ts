@@ -100,6 +100,7 @@ const packSpells = spells.map((spell) => {
     spawnProbability: spell.spawnProbability,
     spawnManualUnlock: spell.spawnManualUnlock,
     isDangerousBlast: spell.isDangerousBlast,
+    neverUnlimited: spell.neverUnlimited,
     // 施放延迟 / 充能（reflection pass, frames @60fps）
     castDelayFrames: spell.castDelayFrames,
     reloadFrames: spell.reloadFrames,

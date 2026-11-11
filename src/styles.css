@@ -1795,6 +1795,12 @@ main {
   color: var(--text);
 }
 
+.picker-toggle {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
 .tree-repeat {
   margin-left: 4px;
   border: none;
