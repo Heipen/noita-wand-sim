@@ -184,6 +184,8 @@ export interface RequirementOptions {
   projectiles?: boolean;
   hp?: boolean;
   half?: boolean;
+  /** Initial IF_HALF status: true means the first IF_HALF skips its next spell. */
+  halfInitial?: boolean;
 }
 
 export interface SimulateOptions {

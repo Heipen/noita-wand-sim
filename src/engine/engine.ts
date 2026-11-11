@@ -364,6 +364,7 @@ export async function createWandEngine(source: ScriptSource): Promise<WandEngine
           spellCount: spells.length,
           always,
           alwaysCount: always.length,
+          half_initial: options.requirements?.halfInitial === true,
         })})`,
         'prepare_wand',
       );

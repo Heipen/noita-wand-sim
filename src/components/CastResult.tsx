@@ -2097,6 +2097,14 @@ export function CastResult({
               />
               {t(lang, 'condition.lowHp')}
             </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={requirements.halfInitial === true}
+                onChange={(event) => onRequirementsChange({ halfInitial: event.target.checked })}
+              />
+              {t(lang, 'condition.halfInitial')}
+            </label>
           </div>
         )}
         <label className="deltas-toggle">

@@ -151,7 +151,12 @@ export default function App() {
   const [alwaysCastEnabled, setAlwaysCastEnabled] = useState(readAlwaysCastEnabled);
   const [wandStickyEnabled, setWandStickyEnabled] = useState(readWandStickyEnabled);
   const [zeroUsesEnabled, setZeroUsesEnabled] = useState(readZeroUsesEnabled);
-  const [requirements, setRequirements] = useState({ enemies: false, projectiles: false, hp: false });
+  const [requirements, setRequirements] = useState({
+    enemies: false,
+    projectiles: false,
+    hp: false,
+    halfInitial: false,
+  });
   const [spellTarget, setSpellTarget] = useState<SpellTarget | null>(null);
   const [isMobile] = useState(
     () => typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent),

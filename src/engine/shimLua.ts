@@ -439,8 +439,6 @@ function __install_hooks()
 
   local orig_start_shot = _start_shot
   function _start_shot(current_mana)
-    -- requirement spells' global status starts fresh for every wand use
-    __if_half = 0
     __ev('shotStart', current_mana, __frame)
     return orig_start_shot(current_mana)
   end
@@ -466,8 +464,8 @@ end
 /** Prepares the wand deck. `cfg` is generated as a Lua table literal by the TS side. */
 export const LUA_PREPARE = `
 function __prepare_wand(cfg)
-  -- IF_HALF alternates across shots of one simulation; start each new simulation fresh.
-  __if_half = 0
+  -- IF_HALF status persists across shots; only set the initial state here.
+  __if_half = cfg.half_initial and 1 or 0
   gun = {
     actions_per_round = cfg.actions_per_round,
     shuffle_deck_when_empty = cfg.shuffle_deck_when_empty,
