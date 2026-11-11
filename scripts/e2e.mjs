@@ -155,6 +155,22 @@ await evaluate(`(${setSearch})(''); true`);
 await waitFor("document.querySelectorAll('.spell-card').length > 400", 10000, 'alias search cleared');
 console.log('✓ community aliases are searchable');
 
+const setTypeFilter = `(value) => {
+  const select = document.querySelector('.toolbar .type-filter');
+  select.value = value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+}`;
+await evaluate(`(${setTypeFilter})('modifier'); true`);
+await waitFor("document.querySelector('.type-filter')?.value === 'modifier'", 10000, 'type filter applied');
+await evaluate(`(${setSearch})('红拳'); true`);
+await waitFor("document.querySelector('.spell-card')?.dataset.spellId === 'DAMAGE'", 10000, 'search ignores type filter');
+if ((await evaluate("document.querySelector('.type-filter')?.value")) !== 'all') throw new Error('typing a search should reset the type filter');
+await evaluate(`(${setTypeFilter})('projectile'); true`);
+await waitFor("document.querySelector('.type-filter')?.value === 'projectile' && document.querySelector('.toolbar .search')?.value === ''", 10000, 'type selection clears search');
+await evaluate(`(${setTypeFilter})('all'); true`);
+await waitFor("document.querySelectorAll('.spell-card').length > 400", 10000, 'type filter reset');
+console.log('✓ search and type filter are mutually exclusive');
+
 // 2) default trigger wand -> cast tree (worker engine)
 const shotText = await waitFor("document.querySelector('.shot-card')?.innerText || ''", 60000, 'first shot');
 console.log('✓ cast tree:', (await evaluate("document.querySelector('.shot-tree')?.innerText")).replace(/\n/g, ' | '));

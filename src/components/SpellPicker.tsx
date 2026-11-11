@@ -22,22 +22,35 @@ export function SpellPicker({ data, lang, hover, onAdd }: Props) {
     const q = query.trim().toLowerCase();
     const compactQ = q.replace(/\s+/g, '');
     return data.spells.filter((spell) => {
-      if (typeFilter !== 'all' && spell.type !== typeFilter) return false;
-      if (!q) return true;
-      if (
-        spell.id.toLowerCase().includes(q) ||
-        spell.nameEn.toLowerCase().includes(q) ||
-        spell.nameZh.includes(q) ||
-        spell.displayZh.includes(q)
-      ) {
-        return true;
+      if (q) {
+        // search always covers every type; the type selector is cleared while searching
+        if (
+          spell.id.toLowerCase().includes(q) ||
+          spell.nameEn.toLowerCase().includes(q) ||
+          spell.nameZh.includes(q) ||
+          spell.displayZh.includes(q)
+        ) {
+          return true;
+        }
+        return (ALIASES[spell.id] ?? []).some((alias) => {
+          const lowered = alias.toLowerCase();
+          return lowered.includes(q) || lowered.replace(/\s+/g, '').includes(compactQ);
+        });
       }
-      return (ALIASES[spell.id] ?? []).some((alias) => {
-        const lowered = alias.toLowerCase();
-        return lowered.includes(q) || lowered.replace(/\s+/g, '').includes(compactQ);
-      });
+      return typeFilter === 'all' || spell.type === typeFilter;
     });
   }, [data.spells, query, typeFilter]);
+
+  // Search and type filtering are mutually exclusive: typing searches all types,
+  // while choosing a type discards the current search.
+  const changeQuery = (value: string) => {
+    setQuery(value);
+    if (value.trim()) setTypeFilter('all');
+  };
+  const changeType = (value: SpellType | 'all') => {
+    setQuery('');
+    setTypeFilter(value);
+  };
 
   return (
     <section className="panel spell-picker">
@@ -51,8 +64,8 @@ export function SpellPicker({ data, lang, hover, onAdd }: Props) {
         typeFilter={typeFilter}
         shown={filtered.length}
         total={data.spells.length}
-        onQueryChange={setQuery}
-        onTypeChange={setTypeFilter}
+        onQueryChange={changeQuery}
+        onTypeChange={changeType}
       />
       <div className="picker-grid">
         {filtered.map((spell) => (
