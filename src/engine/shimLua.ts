@@ -439,6 +439,8 @@ function __install_hooks()
 
   local orig_start_shot = _start_shot
   function _start_shot(current_mana)
+    -- requirement spells' global status starts fresh for every wand use
+    __if_half = 0
     __ev('shotStart', current_mana, __frame)
     return orig_start_shot(current_mana)
   end
