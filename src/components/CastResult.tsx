@@ -1736,11 +1736,13 @@ function ShotCard({
   const slotMap = useMemo(() => buildSlotMap(wandSpells), [wandSpells]);
   const [treeOpen, setTreeOpen] = useState(true);
   const [stepsOpen, setStepsOpen] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedEvent, setSelectedEvent] = useState<number | null>(null);
   useEffect(() => {
     setExpanded(new Set());
     setSelectedEvent(null);
+    setEventsOpen(false);
   }, [shot, foldRepeats]);
   const toggleGroup = useCallback((id: string) => {
     setExpanded((previous) => {
@@ -2042,15 +2044,17 @@ function ShotCard({
         </section>
       )}
 
-      <details className="shot-details">
+      <details className="shot-details" onToggle={(event) => setEventsOpen(event.currentTarget.open)}>
         <summary>{t(lang, 'result.rawEvents')}</summary>
-        <ol className="event-list">
-          {shot.events.map((event: EngineEvent, eventIndex: number) => (
-            <li key={eventIndex} className={`event event-${event.type}`}>
-              {JSON.stringify(event)}
-            </li>
-          ))}
-        </ol>
+        {eventsOpen && (
+          <ol className="event-list">
+            {shot.events.map((event: EngineEvent, eventIndex: number) => (
+              <li key={eventIndex} className={`event event-${event.type}`}>
+                {JSON.stringify(event)}
+              </li>
+            ))}
+          </ol>
+        )}
       </details>
     </article>
   );
