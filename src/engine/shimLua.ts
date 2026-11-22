@@ -117,20 +117,31 @@ end
 
 -- casting callbacks ----------------------------------------------------------
 -- Entities without ProjectileComponent (e.g. Summon Portal) break the
--- projectile tree of the current draw block.  Track that per draw block.
-__broken_projectile_blocks = {}
+-- projectile tree of the current cast branch.
+__projectile_broken = false
+__projectile_broken_stack = {}
+__trigger_branch_stack = {}
 __suppressed_projectile_ends = 0
+__caster_taint = false
 function BeginProjectile(name)
-  local top = #__broken_projectile_blocks
-  if top > 0 and __broken_projectile_blocks[top] then
+  if __projectile_broken then
     __ev('projectileBlocked', name)
+    __suppressed_projectile_ends = __suppressed_projectile_ends + 1
+    return
+  end
+  if __caster_taint then
+    __caster_taint = false
+    __ev('projectileBlocked', name)
+    __projectile_broken = true
     __suppressed_projectile_ends = __suppressed_projectile_ends + 1
     return
   end
   __ev('projectileBegin', name)
   if string.find(name, 'summon_portal.xml', 1, true)
-    or string.find(name, 'tentacle_portal.xml', 1, true) then
-    if top > 0 then __broken_projectile_blocks[top] = true end
+    or string.find(name, 'tentacle_portal.xml', 1, true)
+    or string.find(name, 'wand_ghost_player.xml', 1, true)
+    or string.find(name, 'caster_cast.xml', 1, true) then
+    __projectile_broken = true
   end
 end
 function EndProjectile()
@@ -140,10 +151,26 @@ function EndProjectile()
   end
   __ev('projectileEnd')
 end
-function BeginTriggerTimer(d) __ev('triggerBegin', 'timer', d) end
-function BeginTriggerHitWorld() __ev('triggerBegin', 'hitWorld') end
-function BeginTriggerDeath() __ev('triggerBegin', 'death') end
-function EndTrigger() __ev('triggerEnd') end
+function __begin_trigger(kind, delay)
+  local active = not __projectile_broken
+  table.insert(__trigger_branch_stack, active)
+  if active then
+    table.insert(__projectile_broken_stack, __projectile_broken)
+    __projectile_broken = false
+  end
+  __ev('triggerBegin', kind, delay)
+end
+function __end_trigger()
+  local active = table.remove(__trigger_branch_stack)
+  if active then
+    __projectile_broken = table.remove(__projectile_broken_stack) or false
+  end
+  __ev('triggerEnd')
+end
+function BeginTriggerTimer(d) __begin_trigger('timer', d) end
+function BeginTriggerHitWorld() __begin_trigger('hitWorld') end
+function BeginTriggerDeath() __begin_trigger('death') end
+function EndTrigger() __end_trigger() end
 function Reflection_RegisterProjectile() end
 function SetProjectileConfigs() end
 function RegisterGun() end
@@ -432,12 +459,8 @@ function __install_hooks()
 
   local orig_draw_actions = draw_actions
   function draw_actions(how_many, instant_reload_if_empty)
-    local parent_broken = #__broken_projectile_blocks > 0
-      and __broken_projectile_blocks[#__broken_projectile_blocks]
     __ev('drawBlockBegin', how_many, instant_reload_if_empty == true)
-    table.insert(__broken_projectile_blocks, parent_broken or false)
     local result = orig_draw_actions(how_many, instant_reload_if_empty)
-    table.remove(__broken_projectile_blocks)
     __ev('drawBlockEnd')
     return result
   end
@@ -448,6 +471,7 @@ function __install_hooks()
     -- the draw attempt itself is over: discards caused by spells (e.g. divide) are
     -- real discards and must be reported, unlike the failed-draw discard above
     __inside_draw_action = false
+    if action.id == 'CASTER_CAST' then __caster_taint = true end
     local before = __capture_shot_state()
     __ev('playAction', action.id, action.deck_index)
     local actionIndex = #__events + 1
@@ -514,8 +538,11 @@ end
 function __do_shot(mana_in, frame, cast_delay)
   __frame = frame
   state_cards_drawn = 0
-  __broken_projectile_blocks = {}
+  __projectile_broken = false
+  __projectile_broken_stack = {}
+  __trigger_branch_stack = {}
   __suppressed_projectile_ends = 0
+  __caster_taint = false
   __reset_events()
   state_from_game = {}
   ConfigGunActionInfo_Init(state_from_game)

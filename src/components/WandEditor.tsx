@@ -150,7 +150,39 @@ export function WandEditor({
   const dragClickGuardRef = useRef(0);
   const [dragActive, setDragActive] = useState(false);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [dragSourceKey, setDragSourceKey] = useState<string | null>(null);
   const [dragOutside, setDragOutside] = useState(false);
+  const slotsRef = useRef<HTMLDivElement>(null);
+  const [slotsFit, setSlotsFit] = useState(false);
+
+  useEffect(() => {
+    const container = slotsRef.current;
+    if (!container) return;
+    const update = () => {
+      const slotEls = Array.from(container.children).filter(
+        (child): child is HTMLElement => child instanceof HTMLElement && child.classList.contains('wand-slot'),
+      );
+      if (slotEls.length === 0) {
+        setSlotsFit(true);
+        return;
+      }
+      const tops = slotEls.map((slot) => slot.getBoundingClientRect().top);
+      const bottoms = slotEls.map((slot) => slot.getBoundingClientRect().bottom);
+      const contentHeight = Math.max(...bottoms) - Math.min(...tops);
+      const style = getComputedStyle(container);
+      const available =
+        container.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+      setSlotsFit(contentHeight <= available + 1);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [slots.length, wand.capacity, isMobile]);
 
   useEffect(() => {
     const allowDrop = (event: DragEvent) => {
@@ -174,6 +206,7 @@ export function WandEditor({
       setDragActive(false);
       setDragOutside(false);
       setDragOverKey(null);
+      setDragSourceKey(null);
     };
     document.addEventListener('dragover', allowDrop);
     document.addEventListener('drop', dropOutside);
@@ -187,12 +220,20 @@ export function WandEditor({
     event.dataTransfer.setData('application/x-slot', String(index));
     event.dataTransfer.setData('application/x-source', kind);
     event.dataTransfer.effectAllowed = 'move';
+    const ghost = event.currentTarget.cloneNode(true) as HTMLElement;
+    ghost.classList.add('slot-drag-ghost');
+    ghost.style.top = '-1000px';
+    ghost.style.left = '-1000px';
+    document.body.appendChild(ghost);
+    event.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, ghost.offsetHeight / 2);
+    setTimeout(() => ghost.remove(), 0);
     dragSourceRef.current = { kind, index };
     dropHandledRef.current = false;
     dragClickGuardRef.current = Date.now() + 300;
     setDragActive(true);
     setDragOutside(false);
     setDragOverKey(null);
+    setDragSourceKey(`${kind}:${index}`);
   };
 
   const endSlotDrag = () => {
@@ -202,6 +243,7 @@ export function WandEditor({
     setDragActive(false);
     setDragOutside(false);
     setDragOverKey(null);
+    setDragSourceKey(null);
   };
 
   const deleteSlot = (kind: 'wand' | 'always', index: number, id: string | null) => {
@@ -221,6 +263,7 @@ export function WandEditor({
     setDragActive(false);
     setDragOutside(false);
     setDragOverKey(null);
+    setDragSourceKey(null);
   };
 
   const onDropToSlot = (index: number, event: React.DragEvent) => {
@@ -277,7 +320,6 @@ export function WandEditor({
 
   return (
     <>
-      {dragActive && dragOutside && <div className="wand-delete-mask" aria-hidden="true" />}
       <section className={`panel wand-sticky${isMobile && !wandStickyEnabled ? ' wand-sticky-off' : ''}`}>
         <div className="wand-sticky-head">
           <div className="wand-sticky-title">
@@ -297,11 +339,11 @@ export function WandEditor({
             {t(lang, 'editor.slotsUsed', { n: used, capacity: wand.capacity })}
           </span>
         </div>
-        <div className="wand-slots">
+        <div className={`wand-slots${slotsFit ? ' no-scroll' : ''}`} ref={slotsRef}>
           {slots.map((id, index) => (
             <div
               key={index}
-              className={`wand-slot${id ? ' filled' : ''}${spellTarget?.kind === 'wand' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `wand:${index}` ? ' drag-over' : ''}`}
+              className={`wand-slot${id ? ' filled' : ''}${spellTarget?.kind === 'wand' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `wand:${index}` ? ' drag-over' : ''}${dragOutside && dragSourceKey === `wand:${index}` ? ' drag-delete' : ''}`}
               data-slot={index}
               data-slot-key={`wand:${index}`}
               draggable={Boolean(id)}
@@ -333,7 +375,7 @@ export function WandEditor({
               return (
                 <div
                   key={index}
-                  className={`wand-slot always-slot${id ? ' filled' : ''}${spellTarget?.kind === 'always' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `always:${index}` ? ' drag-over' : ''}`}
+                  className={`wand-slot always-slot${id ? ' filled' : ''}${spellTarget?.kind === 'always' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `always:${index}` ? ' drag-over' : ''}${dragOutside && dragSourceKey === `always:${index}` ? ' drag-delete' : ''}`}
                   data-slot-key={`always:${index}`}
                   draggable={Boolean(id)}
                   onDragStart={(event) => {

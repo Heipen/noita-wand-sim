@@ -88,6 +88,40 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(shot.events.some((event) => event.type === 'projectileBlocked')).toBe(true);
   });
 
+  it('keeps a Summon Portal break across nested draw blocks in the same cast', () => {
+    const shot = engine.simulate(
+      wand(['BURST_4', 'LIGHT_BULLET', 'BULLET', 'SUMMON_PORTAL', 'HOOK', 'SLOW_BULLET'], {
+        actions_per_round: 26,
+      }),
+    ).shots[0];
+    expect(projectileNames(shot)).toEqual(['light_bullet.xml', 'bullet.xml', 'summon_portal.xml']);
+    expect(
+      shot.events
+        .filter((event) => event.type === 'projectileBlocked')
+        .map((event) => (event as { entity: string }).entity.split('/').pop()),
+    ).toEqual(['hook.xml', 'bullet_slow.xml']);
+  });
+
+  it('Inner Spell reached through Add Trigger blocks the rest of the payload', () => {
+    const shot = engine.simulate(
+      wand([
+        'LIGHT_BULLET_TIMER',
+        'BURST_3',
+        'THUNDERBALL',
+        'ADD_TRIGGER',
+        'CASTER_CAST',
+        'POWERDIGGER',
+        'PURPLE_EXPLOSION_FIELD',
+      ]),
+    ).shots[0];
+    expect(projectileNames(shot).sort()).toEqual(['caster_cast.xml', 'light_bullet.xml', 'thunderball.xml']);
+    expect(
+      shot.events
+        .filter((event) => event.type === 'projectileBlocked')
+        .map((event) => (event as { entity: string }).entity.split('/').pop()),
+    ).toEqual(['powerdigger.xml', 'purple_explosion_field.xml']);
+  });
+
   it('Cessation does not break later projectiles in the same cast block', () => {
     const shot = engine.simulate(wand(['CESSATION', 'LIGHT_BULLET'], { actions_per_round: 2 })).shots[0];
     expect(projectileNames(shot)).toEqual(['light_bullet.xml']);

@@ -594,11 +594,15 @@ main {
   overflow-y: auto;
   overscroll-behavior-y: contain;
   padding-bottom: 4px;
-  scrollbar-width: none;
+  scrollbar-width: thin;
+}
+
+.wand-slots.no-scroll {
+  overflow-y: hidden;
 }
 
 .wand-slots::-webkit-scrollbar {
-  display: none;
+  width: 6px;
 }
 
 .wand-slot {
@@ -658,12 +662,26 @@ main {
   box-shadow: inset 0 0 0 2px #ffd479, 0 0 0 3px rgba(255, 212, 121, 0.25);
 }
 
-.wand-delete-mask {
-  position: fixed;
+.wand-slot.drag-delete::before {
+  content: '';
+  position: absolute;
   inset: 0;
-  z-index: 900;
+  z-index: 2;
   pointer-events: none;
-  background: rgba(170, 35, 45, 0.18);
+  border-radius: 7px;
+  background: rgba(190, 35, 45, 0.58);
+}
+
+.slot-drag-ghost {
+  position: fixed !important;
+  z-index: -1;
+  pointer-events: none;
+  margin: 0 !important;
+}
+
+.slot-drag-ghost::before,
+.slot-drag-ghost::after {
+  display: none !important;
 }
 
 .slot-index {

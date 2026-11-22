@@ -62,7 +62,12 @@ function visibleProjectiles(projectiles: string[]): string[] {
 }
 
 /** This action adds an entity without ProjectileComponent, breaking the projectile tree. */
-const PROJECTILE_BREAKING_SPELLS = new Set(['SUMMON_PORTAL', 'TENTACLE_PORTAL']);
+const PROJECTILE_BREAKING_SPELLS = new Set([
+  'SUMMON_PORTAL',
+  'TENTACLE_PORTAL',
+  'CASTER_CAST',
+  'SUMMON_WANDGHOST',
+]);
 /** Cessation schedules a reload after the current cast. */
 const FORCED_RELOAD_SPELLS = new Set(['CESSATION']);
 
@@ -628,9 +633,9 @@ function SummaryItemCard({
     <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}${item.blocked ? ' summary-card-blocked' : ''}`}>
       <div className="summary-card-main">
         <div className="summary-zone summary-projectile-zone">
-          <span className="summary-zone-label">
-            {t(lang, item.blocked ? 'summary.labelBlocked' : 'summary.labelProjectile')}
-          </span>
+          {!item.blocked && (
+            <span className="summary-zone-label">{t(lang, 'summary.labelProjectile')}</span>
+          )}
           <span className={`summary-proj${item.blocked ? ' blocked' : ''}`} title={projectileName}>
             <SpellIcon spell={spell} data={data} size="big" />
             <span className="summary-count">×{item.count}</span>
