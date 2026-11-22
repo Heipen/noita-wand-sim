@@ -145,22 +145,85 @@ export function WandEditor({
   const selectedCustom = customPresets.some((preset) => preset.id === selectedPreset);
 
   const update = (patch: Partial<WandState>) => onChange(normalizeWand({ ...wand, ...patch }));
+  const dragSourceRef = useRef<{ kind: 'wand' | 'always'; index: number } | null>(null);
+  const dropHandledRef = useRef(false);
+
+  useEffect(() => {
+    const allowDrop = (event: DragEvent) => {
+      if (dragSourceRef.current) event.preventDefault();
+    };
+    const dropOutside = (event: DragEvent) => {
+      const source = dragSourceRef.current;
+      if (!source || dropHandledRef.current) return;
+      event.preventDefault();
+      if (source.kind === 'wand') onChange(placeSpell(wand, source.index, null));
+      else onChange(setAlwaysCast(wand, source.index, null));
+      hover.hide();
+      dragSourceRef.current = null;
+    };
+    document.addEventListener('dragover', allowDrop);
+    document.addEventListener('drop', dropOutside);
+    return () => {
+      document.removeEventListener('dragover', allowDrop);
+      document.removeEventListener('drop', dropOutside);
+    };
+  }, [hover, onChange, wand]);
+
+  const beginSlotDrag = (kind: 'wand' | 'always', index: number, event: React.DragEvent) => {
+    event.dataTransfer.setData('application/x-slot', String(index));
+    event.dataTransfer.setData('application/x-source', kind);
+    event.dataTransfer.effectAllowed = 'move';
+    dragSourceRef.current = { kind, index };
+    dropHandledRef.current = false;
+  };
+
+  const endSlotDrag = () => {
+    dragSourceRef.current = null;
+    dropHandledRef.current = false;
+  };
+
+  const markHandledDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropHandledRef.current = true;
+  };
 
   const onDropToSlot = (index: number, event: React.DragEvent) => {
-    event.preventDefault();
+    markHandledDrop(event);
     const spellId = event.dataTransfer.getData('application/x-spell');
     const fromSlot = event.dataTransfer.getData('application/x-slot');
+    const source = event.dataTransfer.getData('application/x-source');
     if (spellId) {
       onChange(placeSpell(wand, index, spellId));
+    } else if (source === 'always' && fromSlot !== '') {
+      const from = Number(fromSlot);
+      let next = placeSpell(wand, index, wand.alwaysCast[from] ?? null);
+      next = setAlwaysCast(next, from, wand.spells[index] ?? null);
+      onChange(next);
     } else if (fromSlot !== '') {
       onChange(swapSlots(wand, Number(fromSlot), index));
     }
   };
 
   const onDropToAlways = (index: number, event: React.DragEvent) => {
-    event.preventDefault();
+    markHandledDrop(event);
     const spellId = event.dataTransfer.getData('application/x-spell');
-    if (spellId) onChange(setAlwaysCast(wand, index, spellId));
+    const fromSlot = event.dataTransfer.getData('application/x-slot');
+    const source = event.dataTransfer.getData('application/x-source');
+    if (spellId) {
+      onChange(setAlwaysCast(wand, index, spellId));
+    } else if (source === 'always' && fromSlot !== '') {
+      const from = Number(fromSlot);
+      const target = wand.alwaysCast[index] ?? null;
+      let next = setAlwaysCast(wand, index, wand.alwaysCast[from] ?? null);
+      next = setAlwaysCast(next, from, target);
+      onChange(next);
+    } else if (source === 'wand' && fromSlot !== '') {
+      const from = Number(fromSlot);
+      let next = setAlwaysCast(wand, index, wand.spells[from] ?? null);
+      next = placeSpell(next, from, wand.alwaysCast[index] ?? null);
+      onChange(next);
+    }
   };
 
   const slotContent = (id: string | null, index: number) => {
@@ -222,9 +285,9 @@ export function WandEditor({
               }}
               onDragStart={(event) => {
                 if (!id) return;
-                event.dataTransfer.setData('application/x-slot', String(index));
-                event.dataTransfer.effectAllowed = 'move';
+                beginSlotDrag('wand', index, event);
               }}
+              onDragEnd={endSlotDrag}
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => onDropToSlot(index, event)}
               onPointerEnter={(event) => {
@@ -248,6 +311,12 @@ export function WandEditor({
                 <div
                   key={index}
                   className={`wand-slot always-slot${id ? ' filled' : ''}${spellTarget?.kind === 'always' && spellTarget.index === index ? ' targeted' : ''}`}
+                  draggable={Boolean(id)}
+                  onDragStart={(event) => {
+                    if (!id) return;
+                    beginSlotDrag('always', index, event);
+                  }}
+                  onDragEnd={endSlotDrag}
                   onDragOver={(event) => event.preventDefault()}
                   onDrop={(event) => onDropToAlways(index, event)}
                   onClick={() => {

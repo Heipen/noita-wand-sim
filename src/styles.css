@@ -631,6 +631,14 @@ main {
   pointer-events: none;
 }
 
+/* Larger pointer/drop target without changing layout size. */
+.wand-slot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 9px;
+}
+
 .slot-index {
   color: #4c4460;
   font-size: 11px;
@@ -654,6 +662,7 @@ main {
   border-radius: 50%;
   padding: 0;
   line-height: 1;
+  z-index: 3;
   font-size: 12px;
   background: #3a2a3a;
   border-color: #5c3a4c;
@@ -662,6 +671,13 @@ main {
 
 .wand-slot.filled:hover .slot-remove {
   display: block;
+}
+
+.slot-remove::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
 }
 
 .always-toggle,
