@@ -69,6 +69,19 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     ]);
   });
 
+  it('Summon Portal breaks later projectiles in the same cast block', () => {
+    const shot = engine.simulate(wand(['SUMMON_PORTAL', 'LIGHT_BULLET'], { actions_per_round: 2 })).shots[0];
+    expect(projectileNames(shot)).toEqual(['summon_portal.xml']);
+    expect(shot.events.filter((event) => event.type === 'action').map((event) => (event as { id: string }).id)).toContain(
+      'LIGHT_BULLET',
+    );
+  });
+
+  it('Cessation does not break later projectiles in the same cast block', () => {
+    const shot = engine.simulate(wand(['CESSATION', 'LIGHT_BULLET'], { actions_per_round: 2 })).shots[0];
+    expect(projectileNames(shot)).toEqual(['light_bullet.xml']);
+  });
+
   it('supports add trigger / add timer / add death trigger', () => {
     for (const [modifier, kind] of [
       ['ADD_TRIGGER', 'hitWorld'],

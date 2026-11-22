@@ -61,8 +61,10 @@ function visibleProjectiles(projectiles: string[]): string[] {
   return projectiles.filter((entity) => !isVisualEffectEntity(entity));
 }
 
-/** These actions do not call draw_actions, so they do not draw the next spell. */
-const STOPS_DRAW_SPELLS = new Set(['CESSATION', 'SUMMON_PORTAL']);
+/** This action adds an entity without ProjectileComponent, breaking the projectile tree. */
+const PROJECTILE_BREAKING_SPELLS = new Set(['SUMMON_PORTAL']);
+/** Cessation schedules a reload after the current cast. */
+const FORCED_RELOAD_SPELLS = new Set(['CESSATION']);
 
 /** Spells that copy/duplicate other spells from the deck. */
 function isDuplicator(id: string): boolean {
@@ -904,9 +906,14 @@ function TreeNodeView({
               {actionSpell && <span className={`tree-type type-${actionSpell.type}`}>{t(lang, `type.${actionSpell.type}`)}</span>}
               {slot !== undefined && <span className="tree-slot">#{slot}</span>}
               {actionNode.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
-              {STOPS_DRAW_SPELLS.has(actionNode.id) && (
-                <span className="tree-badge warn" title={t(lang, 'tree.stopsDrawHint')}>
-                  {t(lang, 'tree.stopsDraw')}
+              {PROJECTILE_BREAKING_SPELLS.has(actionNode.id) && (
+                <span className="tree-badge warn" title={t(lang, 'tree.breaksProjectilesHint')}>
+                  {t(lang, 'tree.breaksProjectiles')}
+                </span>
+              )}
+              {FORCED_RELOAD_SPELLS.has(actionNode.id) && (
+                <span className="tree-badge warn" title={t(lang, 'tree.forcedReloadHint')}>
+                  {t(lang, 'tree.forcedReload')}
                 </span>
               )}
               {actionNode.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
@@ -992,9 +999,14 @@ function TreeNodeView({
             {spell && <span className={`tree-type type-${spell.type}`}>{t(lang, `type.${spell.type}`)}</span>}
             {slot !== undefined && <span className="tree-slot">#{slot}</span>}
             {node.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
-            {STOPS_DRAW_SPELLS.has(node.id) && (
-              <span className="tree-badge warn" title={t(lang, 'tree.stopsDrawHint')}>
-                {t(lang, 'tree.stopsDraw')}
+            {PROJECTILE_BREAKING_SPELLS.has(node.id) && (
+              <span className="tree-badge warn" title={t(lang, 'tree.breaksProjectilesHint')}>
+                {t(lang, 'tree.breaksProjectiles')}
+              </span>
+            )}
+            {FORCED_RELOAD_SPELLS.has(node.id) && (
+              <span className="tree-badge warn" title={t(lang, 'tree.forcedReloadHint')}>
+                {t(lang, 'tree.forcedReload')}
               </span>
             )}
             {node.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
@@ -1808,11 +1820,11 @@ function ShotCard({
     () => groupCastBlocks(shot.tree, selectedEvent),
     [shot.tree, selectedEvent],
   );
-  const stopsDrawNames = useMemo(() => {
+  const projectileBreakerNames = useMemo(() => {
     const ids = new Set<string>();
     for (const block of castBlockGroups) {
       for (const action of block.actions) {
-        if (STOPS_DRAW_SPELLS.has(action.id)) ids.add(action.id);
+        if (PROJECTILE_BREAKING_SPELLS.has(action.id)) ids.add(action.id);
       }
     }
     return [...ids].map((id) => spellName(maps.byId.get(id), id, lang));
@@ -2026,9 +2038,9 @@ function ShotCard({
                   </div>
                 </div>
               ))}
-              {stopsDrawNames.length > 0 && (
+              {projectileBreakerNames.length > 0 && (
                 <div className="cast-block-note">
-                  {t(lang, 'result.stopsDrawNote', { spells: stopsDrawNames.join(' / ') })}
+                  {t(lang, 'result.projectileBreakNote', { spells: projectileBreakerNames.join(' / ') })}
                 </div>
               )}
             </div>

@@ -388,10 +388,10 @@ await waitFor("[...document.querySelectorAll('.summary-proj')].some((el) => (el.
 await evaluate("document.querySelector('.condition-switch input').click(); true");
 console.log('✓ IF_ condition toggles change the simulated result');
 
-// CESSATION / SUMMON_PORTAL do not draw the next spell; surface that explicitly
-await loadWand(['CESSATION', 'LIGHT_BULLET']);
-await waitFor("[...document.querySelectorAll('.tree-badge')].some((el) => el.innerText.includes('不抽取下个法术'))", 60000, 'stops-draw tree badge');
-await waitFor("!!document.querySelector('.cast-block-note')", 10000, 'stops-draw action note');
+// Summon Portal breaks later projectile generation in the same cast block
+await loadWand(['SUMMON_PORTAL', 'LIGHT_BULLET']);
+await waitFor("[...document.querySelectorAll('.tree-badge')].some((el) => el.innerText.includes('阻断后续投射物'))", 60000, 'projectile-breaker tree badge');
+await waitFor("!!document.querySelector('.cast-block-note')", 10000, 'projectile-breaker action note');
 console.log('✓ stopping spells are marked in the tree and action summary');
 
 // end-of-cast hand flush: discard step must show the card already in discard and hand empty

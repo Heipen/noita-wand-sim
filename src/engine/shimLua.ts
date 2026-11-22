@@ -116,8 +116,28 @@ function __reset_events()
 end
 
 -- casting callbacks ----------------------------------------------------------
-function BeginProjectile(name) __ev('projectileBegin', name) end
-function EndProjectile() __ev('projectileEnd') end
+-- Entities without ProjectileComponent (e.g. Summon Portal) break the
+-- projectile tree of the current draw block.  Track that per draw block.
+__broken_projectile_blocks = {}
+__suppressed_projectile_ends = 0
+function BeginProjectile(name)
+  local top = #__broken_projectile_blocks
+  if top > 0 and __broken_projectile_blocks[top] then
+    __suppressed_projectile_ends = __suppressed_projectile_ends + 1
+    return
+  end
+  __ev('projectileBegin', name)
+  if string.find(name, 'summon_portal.xml', 1, true) then
+    if top > 0 then __broken_projectile_blocks[top] = true end
+  end
+end
+function EndProjectile()
+  if __suppressed_projectile_ends > 0 then
+    __suppressed_projectile_ends = __suppressed_projectile_ends - 1
+    return
+  end
+  __ev('projectileEnd')
+end
 function BeginTriggerTimer(d) __ev('triggerBegin', 'timer', d) end
 function BeginTriggerHitWorld() __ev('triggerBegin', 'hitWorld') end
 function BeginTriggerDeath() __ev('triggerBegin', 'death') end
@@ -410,8 +430,12 @@ function __install_hooks()
 
   local orig_draw_actions = draw_actions
   function draw_actions(how_many, instant_reload_if_empty)
+    local parent_broken = #__broken_projectile_blocks > 0
+      and __broken_projectile_blocks[#__broken_projectile_blocks]
     __ev('drawBlockBegin', how_many, instant_reload_if_empty == true)
+    table.insert(__broken_projectile_blocks, parent_broken or false)
     local result = orig_draw_actions(how_many, instant_reload_if_empty)
+    table.remove(__broken_projectile_blocks)
     __ev('drawBlockEnd')
     return result
   end
@@ -488,6 +512,8 @@ end
 function __do_shot(mana_in, frame, cast_delay)
   __frame = frame
   state_cards_drawn = 0
+  __broken_projectile_blocks = {}
+  __suppressed_projectile_ends = 0
   __reset_events()
   state_from_game = {}
   ConfigGunActionInfo_Init(state_from_game)
