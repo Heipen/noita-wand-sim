@@ -593,7 +593,8 @@ main {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
-  padding-bottom: 4px;
+  padding-top: 6px;
+  padding-bottom: 6px;
   scrollbar-width: thin;
 }
 
@@ -662,26 +663,35 @@ main {
   box-shadow: inset 0 0 0 2px #ffd479, 0 0 0 3px rgba(255, 212, 121, 0.25);
 }
 
-.wand-slot.drag-delete::before {
+.slot-drag-proxy {
+  position: fixed;
+  z-index: 1200;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #6a5a86;
+  border-radius: 8px;
+  background: #1a1622;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.slot-drag-proxy img {
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.slot-drag-proxy.delete::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  border-radius: 7px;
-  background: rgba(190, 35, 45, 0.58);
-}
-
-.slot-drag-ghost {
-  position: fixed !important;
-  z-index: -1;
-  pointer-events: none;
-  margin: 0 !important;
-}
-
-.slot-drag-ghost::before,
-.slot-drag-ghost::after {
-  display: none !important;
+  border-radius: 8px;
+  background: rgba(190, 35, 45, 0.68);
 }
 
 .slot-index {

@@ -152,6 +152,7 @@ export function WandEditor({
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [dragSourceKey, setDragSourceKey] = useState<string | null>(null);
   const [dragOutside, setDragOutside] = useState(false);
+  const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
   const slotsRef = useRef<HTMLDivElement>(null);
   const [slotsFit, setSlotsFit] = useState(false);
 
@@ -193,7 +194,8 @@ export function WandEditor({
       const sourceKey = `${dragSourceRef.current.kind}:${dragSourceRef.current.index}`;
       const targetKey = key === sourceKey ? null : key;
       setDragOverKey((previous) => (previous === targetKey ? previous : targetKey));
-      setDragOutside((previous) => (previous === !targetKey ? previous : !targetKey));
+      setDragOutside((previous) => (previous === !key ? previous : !key));
+      setDragPointer({ x: event.clientX, y: event.clientY });
     };
     const dropOutside = (event: DragEvent) => {
       const source = dragSourceRef.current;
@@ -207,6 +209,7 @@ export function WandEditor({
       setDragOutside(false);
       setDragOverKey(null);
       setDragSourceKey(null);
+      setDragPointer(null);
     };
     document.addEventListener('dragover', allowDrop);
     document.addEventListener('drop', dropOutside);
@@ -220,13 +223,11 @@ export function WandEditor({
     event.dataTransfer.setData('application/x-slot', String(index));
     event.dataTransfer.setData('application/x-source', kind);
     event.dataTransfer.effectAllowed = 'move';
-    const ghost = event.currentTarget.cloneNode(true) as HTMLElement;
-    ghost.classList.add('slot-drag-ghost');
-    ghost.style.top = '-1000px';
-    ghost.style.left = '-1000px';
-    document.body.appendChild(ghost);
-    event.dataTransfer.setDragImage(ghost, ghost.offsetWidth / 2, ghost.offsetHeight / 2);
-    setTimeout(() => ghost.remove(), 0);
+    const transparent = document.createElement('div');
+    transparent.style.cssText = 'position:fixed;top:-10px;left:-10px;width:1px;height:1px;opacity:0;';
+    document.body.appendChild(transparent);
+    event.dataTransfer.setDragImage(transparent, 0, 0);
+    setTimeout(() => transparent.remove(), 0);
     dragSourceRef.current = { kind, index };
     dropHandledRef.current = false;
     dragClickGuardRef.current = Date.now() + 300;
@@ -234,6 +235,7 @@ export function WandEditor({
     setDragOutside(false);
     setDragOverKey(null);
     setDragSourceKey(`${kind}:${index}`);
+    setDragPointer({ x: event.clientX, y: event.clientY });
   };
 
   const endSlotDrag = () => {
@@ -244,6 +246,7 @@ export function WandEditor({
     setDragOutside(false);
     setDragOverKey(null);
     setDragSourceKey(null);
+    setDragPointer(null);
   };
 
   const deleteSlot = (kind: 'wand' | 'always', index: number, id: string | null) => {
@@ -264,6 +267,7 @@ export function WandEditor({
     setDragOutside(false);
     setDragOverKey(null);
     setDragSourceKey(null);
+    setDragPointer(null);
   };
 
   const onDropToSlot = (index: number, event: React.DragEvent) => {
@@ -317,9 +321,25 @@ export function WandEditor({
   };
 
   const presetName = () => wand.name.trim() || t(lang, 'editor.defaultPresetName');
+  const dragSpellId = (() => {
+    if (!dragSourceKey) return null;
+    const [kind, rawIndex] = dragSourceKey.split(':');
+    const index = Number(rawIndex);
+    return kind === 'wand' ? (wand.spells[index] ?? null) : (wand.alwaysCast[index] ?? null);
+  })();
+  const dragSpell = dragSpellId ? spellById.get(dragSpellId) : undefined;
+  const dragIcon = dragSpell ? spellIconUrl(data, dragSpell) : undefined;
 
   return (
     <>
+      {dragActive && dragPointer && dragSpellId && (
+        <div
+          className={`slot-drag-proxy${dragOutside ? ' delete' : ''}`}
+          style={{ left: dragPointer.x, top: dragPointer.y }}
+        >
+          {dragIcon ? <img src={dragIcon} alt="" /> : <span>{dragSpellId.slice(0, 2)}</span>}
+        </div>
+      )}
       <section className={`panel wand-sticky${isMobile && !wandStickyEnabled ? ' wand-sticky-off' : ''}`}>
         <div className="wand-sticky-head">
           <div className="wand-sticky-title">
@@ -343,7 +363,7 @@ export function WandEditor({
           {slots.map((id, index) => (
             <div
               key={index}
-              className={`wand-slot${id ? ' filled' : ''}${spellTarget?.kind === 'wand' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `wand:${index}` ? ' drag-over' : ''}${dragOutside && dragSourceKey === `wand:${index}` ? ' drag-delete' : ''}`}
+              className={`wand-slot${id ? ' filled' : ''}${spellTarget?.kind === 'wand' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `wand:${index}` ? ' drag-over' : ''}`}
               data-slot={index}
               data-slot-key={`wand:${index}`}
               draggable={Boolean(id)}
@@ -360,7 +380,11 @@ export function WandEditor({
               }}
               onPointerLeave={hover.hide}
             >
-              {slotContent(id, index)}
+              {dragActive && dragSourceKey === `wand:${index}` ? (
+                <span className="slot-index">{index + 1}</span>
+              ) : (
+                slotContent(id, index)
+              )}
             </div>
           ))}
         </div>
@@ -375,7 +399,7 @@ export function WandEditor({
               return (
                 <div
                   key={index}
-                  className={`wand-slot always-slot${id ? ' filled' : ''}${spellTarget?.kind === 'always' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `always:${index}` ? ' drag-over' : ''}${dragOutside && dragSourceKey === `always:${index}` ? ' drag-delete' : ''}`}
+                  className={`wand-slot always-slot${id ? ' filled' : ''}${spellTarget?.kind === 'always' && spellTarget.index === index ? ' targeted' : ''}${dragOverKey === `always:${index}` ? ' drag-over' : ''}`}
                   data-slot-key={`always:${index}`}
                   draggable={Boolean(id)}
                   onDragStart={(event) => {
@@ -391,7 +415,9 @@ export function WandEditor({
                   }}
                   onPointerLeave={hover.hide}
                 >
-                  {id ? (
+                  {dragActive && dragSourceKey === `always:${index}` ? (
+                    <span className="slot-index">{index + 1}</span>
+                  ) : id ? (
                     <>
                       {icon ? <img src={icon} alt="" draggable={false} /> : <span className="slot-index">★</span>}
                     </>
