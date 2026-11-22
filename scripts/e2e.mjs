@@ -260,10 +260,10 @@ if (!(mobileWandRows.clientHeight >= mobileWandRows.rowPitch + mobileWandRows.sl
 await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false });
 await sleep(200);
 // ordinary wand slot: tap -> search visible -> choose spell
-await evaluate("document.querySelector('.wand-slot[data-slot=\"2\"]').click(); true");
-await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].targeted')", 10000, 'wand slot targeting');
+await evaluate("document.querySelector('.wand-slot[data-slot=\"10\"]').click(); true");
+await waitFor("!!document.querySelector('.wand-slot[data-slot=\"10\"].targeted')", 10000, 'wand slot targeting');
 const targetedStyle = await evaluate(`(() => {
-  const el = document.querySelector('.wand-slot[data-slot="2"].targeted');
+  const el = document.querySelector('.wand-slot[data-slot="10"].targeted');
   const style = getComputedStyle(el);
   return { outline: style.outlineStyle, shadow: style.boxShadow };
 })()`);
@@ -280,7 +280,7 @@ const mobileSearch = await evaluate(`(() => {
 if (mobileSearch.focused) throw new Error('search field must not be focused (mobile keyboard): ' + JSON.stringify(mobileSearch));
 if (mobileSearch.top < mobileSearch.stickyBottom - 1) throw new Error('search field should be scrolled below the sticky wand: ' + JSON.stringify(mobileSearch));
 await evaluate(`(() => { const el = document.querySelector('.spell-card[data-spell-id="DAMAGE"]'); el.click(); return true; })()`);
-await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].filled')", 10000, 'wand slot target filled');
+await waitFor("!!document.querySelector('.wand-slot[data-slot=\"10\"].filled')", 10000, 'wand slot target filled');
 // Always Cast slot: same tap flow, and the four slots stay on one row
 await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
 await waitFor("!!document.querySelector('.always-slot.targeted')", 10000, 'always cast targeting');
@@ -291,8 +291,8 @@ const alwaysRows = await evaluate(
 );
 if (new Set(alwaysRows).size !== 1) throw new Error('always cast slots must stay on one row: ' + JSON.stringify(alwaysRows));
 // tapping elsewhere cancels targeting, with no reminder banner to dismiss
-await evaluate("document.querySelector('.wand-slot[data-slot=\"2\"]').click(); true");
-await waitFor("!!document.querySelector('.wand-slot[data-slot=\"2\"].targeted')", 10000, 'wand slot retarget');
+await evaluate("document.querySelector('.wand-slot:not(.filled)').click(); true");
+await waitFor("!!document.querySelector('.wand-slot.targeted')", 10000, 'wand slot retarget');
 await evaluate("document.querySelector('h1').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true })); true");
 await waitFor("document.querySelectorAll('.wand-slot.targeted').length === 0", 10000, 'out-of-picker target cancelled');
 await evaluate("document.querySelector('.always-slot:not(.filled)').click(); true");
