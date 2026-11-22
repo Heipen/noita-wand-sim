@@ -123,6 +123,68 @@ __projectile_broken_stack = {}
 __trigger_branch_stack = {}
 __suppressed_projectile_ends = 0
 __caster_taint = false
+__current_action = nil
+__projkiller_actions = {
+  CASTER_CAST = true,
+  SUMMON_WANDGHOST = true,
+  WORM_RAIN = true,
+  MASS_POLYMORPH = true,
+  SUMMON_PORTAL = true,
+  TENTACLE_PORTAL = true,
+  ALL_DEATHCROSSES = true,
+  ALL_NUKES = true,
+  ALL_ROCKETS = true,
+  ALL_BLACKHOLES = true,
+  ALL_DISCS = true,
+  ALL_ACID = true,
+  TOUCH_BLOOD = true,
+  TOUCH_GOLD = true,
+  TOUCH_WATER = true,
+  TOUCH_OIL = true,
+  TOUCH_ALCOHOL = true,
+  TOUCH_SMOKE = true,
+  TOUCH_GRASS = true,
+  TOUCH_PISS = true,
+  SEA_LAVA = true,
+  SEA_ALCOHOL = true,
+  SEA_OIL = true,
+  SEA_WATER = true,
+  SEA_SWAMP = true,
+  SEA_ACID = true,
+  SEA_ACID_GAS = true,
+  SEA_MIMIC = true,
+  CIRCLE_FIRE = true,
+  CIRCLE_ACID = true,
+  CIRCLE_OIL = true,
+  CIRCLE_WATER = true,
+}
+function __is_breaker_entity(name)
+  return string.find(name, 'summon_portal.xml', 1, true)
+    or string.find(name, 'tentacle_portal.xml', 1, true)
+    or string.find(name, 'wand_ghost_player.xml', 1, true)
+    or string.find(name, 'caster_cast.xml', 1, true)
+    or string.find(name, 'mass_polymorph.xml', 1, true)
+    or string.find(name, 'worm_rain.xml', 1, true)
+    or string.find(name, 'all_deathcrosses.xml', 1, true)
+    or string.find(name, 'all_nukes.xml', 1, true)
+    or string.find(name, 'all_rockets.xml', 1, true)
+    or string.find(name, 'all_blackholes.xml', 1, true)
+    or string.find(name, 'all_discs.xml', 1, true)
+    or string.find(name, 'all_acid.xml', 1, true)
+    or string.find(name, '/touch_', 1, true)
+    or string.find(name, 'sea_lava.xml', 1, true)
+    or string.find(name, 'sea_alcohol.xml', 1, true)
+    or string.find(name, 'sea_oil.xml', 1, true)
+    or string.find(name, 'sea_water.xml', 1, true)
+    or string.find(name, 'sea_swamp.xml', 1, true)
+    or string.find(name, 'sea_acid.xml', 1, true)
+    or string.find(name, 'sea_acid_gas.xml', 1, true)
+    or string.find(name, 'sea_mimic.xml', 1, true)
+    or string.find(name, 'circle_fire.xml', 1, true)
+    or string.find(name, 'circle_acid.xml', 1, true)
+    or string.find(name, 'circle_oil.xml', 1, true)
+    or string.find(name, 'circle_water.xml', 1, true)
+end
 function BeginProjectile(name)
   if __projectile_broken then
     __ev('projectileBlocked', name)
@@ -137,10 +199,7 @@ function BeginProjectile(name)
     return
   end
   __ev('projectileBegin', name)
-  if string.find(name, 'summon_portal.xml', 1, true)
-    or string.find(name, 'tentacle_portal.xml', 1, true)
-    or string.find(name, 'wand_ghost_player.xml', 1, true)
-    or string.find(name, 'caster_cast.xml', 1, true) then
+  if __is_breaker_entity(name) or __projkiller_actions[__current_action] then
     __projectile_broken = true
   end
 end
@@ -472,11 +531,15 @@ function __install_hooks()
     -- real discards and must be reported, unlike the failed-draw discard above
     __inside_draw_action = false
     if action.id == 'CASTER_CAST' then __caster_taint = true end
+    local previous_action = __current_action
+    __current_action = action.id
     local before = __capture_shot_state()
     __ev('playAction', action.id, action.deck_index)
     local actionIndex = #__events + 1
     __ev('action', action.id, action.deck_index, nil, (c and c.lifetime_add) or 0)
     local result = orig_play_action(action)
+    __current_action = previous_action
+    if __projkiller_actions[action.id] then __projectile_broken = true end
     __events[actionIndex][3] = __state_delta(before)
     return result
   end

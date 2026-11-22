@@ -102,6 +102,52 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     ).toEqual(['hook.xml', 'bullet_slow.xml']);
   });
 
+  it('every projkiller action blocks a following projectile', () => {
+    const ids = [
+      'SUMMON_PORTAL',
+      'TENTACLE_PORTAL',
+      'CASTER_CAST',
+      'SUMMON_WANDGHOST',
+      'WORM_RAIN',
+      'MASS_POLYMORPH',
+      'ALL_DEATHCROSSES',
+      'ALL_NUKES',
+      'ALL_ROCKETS',
+      'ALL_BLACKHOLES',
+      'ALL_DISCS',
+      'ALL_ACID',
+      'TOUCH_BLOOD',
+      'TOUCH_GOLD',
+      'TOUCH_WATER',
+      'TOUCH_OIL',
+      'TOUCH_ALCOHOL',
+      'TOUCH_SMOKE',
+      'TOUCH_GRASS',
+      'TOUCH_PISS',
+      'SEA_LAVA',
+      'SEA_ALCOHOL',
+      'SEA_OIL',
+      'SEA_WATER',
+      'SEA_SWAMP',
+      'SEA_ACID',
+      'SEA_ACID_GAS',
+      'SEA_MIMIC',
+      'CIRCLE_FIRE',
+      'CIRCLE_ACID',
+      'CIRCLE_OIL',
+      'CIRCLE_WATER',
+    ];
+    const failures: string[] = [];
+    for (const id of ids) {
+      const shot = engine.simulate(wand([id, 'LIGHT_BULLET'], { actions_per_round: 2 }), { mana: 50000 }).shots[0];
+      const blocked = shot.events
+        .filter((event) => event.type === 'projectileBlocked')
+        .map((event) => (event as { entity: string }).entity);
+      if (!blocked.some((entity) => entity.endsWith('/light_bullet.xml'))) failures.push(id);
+    }
+    expect(failures).toEqual([]);
+  }, 20000);
+
   it('Inner Spell reached through Add Trigger blocks the rest of the payload', () => {
     const shot = engine.simulate(
       wand([
