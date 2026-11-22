@@ -151,18 +151,6 @@ export function WandEditor({
   const [dragActive, setDragActive] = useState(false);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [dragOutside, setDragOutside] = useState(false);
-  const [deleteNotice, setDeleteNotice] = useState(false);
-  const deleteNoticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const flashDeleted = () => {
-    setDeleteNotice(true);
-    if (deleteNoticeTimerRef.current) clearTimeout(deleteNoticeTimerRef.current);
-    deleteNoticeTimerRef.current = setTimeout(() => setDeleteNotice(false), 1200);
-  };
-
-  useEffect(() => () => {
-    if (deleteNoticeTimerRef.current) clearTimeout(deleteNoticeTimerRef.current);
-  }, []);
 
   useEffect(() => {
     const allowDrop = (event: DragEvent) => {
@@ -170,8 +158,10 @@ export function WandEditor({
       event.preventDefault();
       const slot = (event.target as Element | null)?.closest?.('.wand-slot');
       const key = slot?.getAttribute('data-slot-key') ?? null;
-      setDragOverKey((previous) => (previous === key ? previous : key));
-      setDragOutside((previous) => (previous === !key ? previous : !key));
+      const sourceKey = `${dragSourceRef.current.kind}:${dragSourceRef.current.index}`;
+      const targetKey = key === sourceKey ? null : key;
+      setDragOverKey((previous) => (previous === targetKey ? previous : targetKey));
+      setDragOutside((previous) => (previous === !targetKey ? previous : !targetKey));
     };
     const dropOutside = (event: DragEvent) => {
       const source = dragSourceRef.current;
@@ -180,7 +170,6 @@ export function WandEditor({
       if (source.kind === 'wand') onChange(placeSpell(wand, source.index, null));
       else onChange(setAlwaysCast(wand, source.index, null));
       hover.hide();
-      flashDeleted();
       dragSourceRef.current = null;
       setDragActive(false);
       setDragOutside(false);
@@ -203,7 +192,7 @@ export function WandEditor({
     dragClickGuardRef.current = Date.now() + 300;
     setDragActive(true);
     setDragOutside(false);
-    setDragOverKey(`${kind}:${index}`);
+    setDragOverKey(null);
   };
 
   const endSlotDrag = () => {
@@ -288,18 +277,7 @@ export function WandEditor({
 
   return (
     <>
-      {dragActive && (
-        <div className={`wand-drag-hint${dragOutside ? ' delete' : ''}`}>
-          {dragOutside
-            ? t(lang, 'editor.dragToDelete')
-            : dragOverKey
-              ? t(lang, 'editor.dragToMove')
-              : t(lang, 'editor.dragMoving')}
-        </div>
-      )}
-      {deleteNotice && !dragActive && (
-        <div className="wand-drag-hint delete">{t(lang, 'editor.deleted')}</div>
-      )}
+      {dragActive && dragOutside && <div className="wand-delete-mask" aria-hidden="true" />}
       <section className={`panel wand-sticky${isMobile && !wandStickyEnabled ? ' wand-sticky-off' : ''}`}>
         <div className="wand-sticky-head">
           <div className="wand-sticky-title">
