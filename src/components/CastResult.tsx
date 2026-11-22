@@ -65,7 +65,6 @@ function visibleProjectiles(projectiles: string[]): string[] {
 const PROJECTILE_BREAKING_SPELLS = new Set([
   'SUMMON_PORTAL',
   'TENTACLE_PORTAL',
-  'CASTER_CAST',
   'SUMMON_WANDGHOST',
   'WORM_RAIN',
   'MASS_POLYMORPH',

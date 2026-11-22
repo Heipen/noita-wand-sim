@@ -122,10 +122,8 @@ __projectile_broken = false
 __projectile_broken_stack = {}
 __trigger_branch_stack = {}
 __suppressed_projectile_ends = 0
-__caster_taint = false
 __current_action = nil
 __projkiller_actions = {
-  CASTER_CAST = true,
   SUMMON_WANDGHOST = true,
   WORM_RAIN = true,
   MASS_POLYMORPH = true,
@@ -188,13 +186,6 @@ end
 function BeginProjectile(name)
   if __projectile_broken then
     __ev('projectileBlocked', name)
-    __suppressed_projectile_ends = __suppressed_projectile_ends + 1
-    return
-  end
-  if __caster_taint then
-    __caster_taint = false
-    __ev('projectileBlocked', name)
-    __projectile_broken = true
     __suppressed_projectile_ends = __suppressed_projectile_ends + 1
     return
   end
@@ -530,7 +521,6 @@ function __install_hooks()
     -- the draw attempt itself is over: discards caused by spells (e.g. divide) are
     -- real discards and must be reported, unlike the failed-draw discard above
     __inside_draw_action = false
-    if action.id == 'CASTER_CAST' then __caster_taint = true end
     local previous_action = __current_action
     __current_action = action.id
     local before = __capture_shot_state()
@@ -605,7 +595,6 @@ function __do_shot(mana_in, frame, cast_delay)
   __projectile_broken_stack = {}
   __trigger_branch_stack = {}
   __suppressed_projectile_ends = 0
-  __caster_taint = false
   __reset_events()
   state_from_game = {}
   ConfigGunActionInfo_Init(state_from_game)

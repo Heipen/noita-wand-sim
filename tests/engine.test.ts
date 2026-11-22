@@ -106,7 +106,6 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     const ids = [
       'SUMMON_PORTAL',
       'TENTACLE_PORTAL',
-      'CASTER_CAST',
       'SUMMON_WANDGHOST',
       'WORM_RAIN',
       'MASS_POLYMORPH',
@@ -147,6 +146,19 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     }
     expect(failures).toEqual([]);
   }, 20000);
+
+  it('Inner Spell used directly does not break later projectiles', () => {
+    const shot = engine.simulate(
+      wand(['LIGHT_BULLET_TIMER', 'BURST_3', 'THUNDERBALL', 'CASTER_CAST', 'HEAVY_BULLET', 'PURPLE_EXPLOSION_FIELD']),
+    ).shots[0];
+    expect(projectileNames(shot)).toEqual([
+      'light_bullet.xml',
+      'thunderball.xml',
+      'bullet_heavy.xml',
+      'purple_explosion_field.xml',
+    ]);
+    expect(shot.events.some((event) => event.type === 'projectileBlocked')).toBe(false);
+  });
 
   it('Inner Spell reached through Add Trigger blocks the rest of the payload', () => {
     const shot = engine.simulate(
