@@ -61,6 +61,9 @@ function visibleProjectiles(projectiles: string[]): string[] {
   return projectiles.filter((entity) => !isVisualEffectEntity(entity));
 }
 
+/** These actions do not call draw_actions, so they do not draw the next spell. */
+const STOPS_DRAW_SPELLS = new Set(['CESSATION', 'SUMMON_PORTAL']);
+
 /** Spells that copy/duplicate other spells from the deck. */
 function isDuplicator(id: string): boolean {
   return /^DIVIDE_\d+$/.test(id) || id === 'TAU' || id === 'OMEGA';
@@ -901,6 +904,11 @@ function TreeNodeView({
               {actionSpell && <span className={`tree-type type-${actionSpell.type}`}>{t(lang, `type.${actionSpell.type}`)}</span>}
               {slot !== undefined && <span className="tree-slot">#{slot}</span>}
               {actionNode.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
+              {STOPS_DRAW_SPELLS.has(actionNode.id) && (
+                <span className="tree-badge warn" title={t(lang, 'tree.stopsDrawHint')}>
+                  {t(lang, 'tree.stopsDraw')}
+                </span>
+              )}
               {actionNode.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
               <CessationLifetimeBadge node={actionNode} lang={lang} />
               {actionNode.recursion !== null && (
@@ -984,6 +992,11 @@ function TreeNodeView({
             {spell && <span className={`tree-type type-${spell.type}`}>{t(lang, `type.${spell.type}`)}</span>}
             {slot !== undefined && <span className="tree-slot">#{slot}</span>}
             {node.dontDraw && <span className="tree-badge warn">{t(lang, 'tree.dontDraw')}</span>}
+            {STOPS_DRAW_SPELLS.has(node.id) && (
+              <span className="tree-badge warn" title={t(lang, 'tree.stopsDrawHint')}>
+                {t(lang, 'tree.stopsDraw')}
+              </span>
+            )}
             {node.permanent && <span className="tree-badge">{t(lang, 'tree.permanent')}</span>}
             <CessationLifetimeBadge node={node} lang={lang} />
             {node.recursion !== null && <span className="tree-badge">{t(lang, 'tree.recursion', { n: node.recursion })}</span>}
@@ -1795,6 +1808,15 @@ function ShotCard({
     () => groupCastBlocks(shot.tree, selectedEvent),
     [shot.tree, selectedEvent],
   );
+  const stopsDrawNames = useMemo(() => {
+    const ids = new Set<string>();
+    for (const block of castBlockGroups) {
+      for (const action of block.actions) {
+        if (STOPS_DRAW_SPELLS.has(action.id)) ids.add(action.id);
+      }
+    }
+    return [...ids].map((id) => spellName(maps.byId.get(id), id, lang));
+  }, [castBlockGroups, lang, maps]);
   const changedActionIds = useMemo(() => {
     if (selectedEvent === null) return new Set<string>();
     const current = castBlockActionCounts(castBlockGroups);
@@ -2004,6 +2026,11 @@ function ShotCard({
                   </div>
                 </div>
               ))}
+              {stopsDrawNames.length > 0 && (
+                <div className="cast-block-note">
+                  {t(lang, 'result.stopsDrawNote', { spells: stopsDrawNames.join(' / ') })}
+                </div>
+              )}
             </div>
           )}
           <div className="piles-grid">

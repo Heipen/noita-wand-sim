@@ -1145,6 +1145,12 @@ main {
   color: var(--muted);
 }
 
+.cast-block-note {
+  margin-top: 5px;
+  font-size: 10px;
+  color: #d7c28a;
+}
+
 .cast-block-chip {
   display: inline-flex;
   align-items: center;
