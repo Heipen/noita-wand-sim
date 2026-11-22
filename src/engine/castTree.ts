@@ -94,6 +94,7 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
           delta: event.delta,
           lifetimeAdd: event.lifetimeAdd,
           projectiles: [],
+          blockedProjectiles: [],
           eventIndex,
           children: [],
         };
@@ -127,6 +128,11 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
         lastProjectile = event.entity;
         const action = nearest('action');
         if (action && action.kind === 'action') action.projectiles.push(event.entity);
+        break;
+      }
+      case 'projectileBlocked': {
+        const action = nearest('action');
+        if (action && action.kind === 'action') action.blockedProjectiles.push(event.entity);
         break;
       }
       case 'drawBlockEnd': {

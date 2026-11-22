@@ -62,7 +62,7 @@ function visibleProjectiles(projectiles: string[]): string[] {
 }
 
 /** This action adds an entity without ProjectileComponent, breaking the projectile tree. */
-const PROJECTILE_BREAKING_SPELLS = new Set(['SUMMON_PORTAL']);
+const PROJECTILE_BREAKING_SPELLS = new Set(['SUMMON_PORTAL', 'TENTACLE_PORTAL']);
 /** Cessation schedules a reload after the current cast. */
 const FORCED_RELOAD_SPELLS = new Set(['CESSATION']);
 
@@ -190,7 +190,7 @@ function nodeSignature(node: CastTreeNode): string {
     case 'action':
       // fold repeated casts of the same spell only when their nested branches match;
       // Divide By copies with different payloads must stay separate
-      return `action(${node.id})[${childSignature(node.children)}]${visibleProjectiles(node.projectiles).join(',')}`;
+      return `action(${node.id})[${childSignature(node.children)}]${visibleProjectiles(node.projectiles).join(',')}|b:${visibleProjectiles(node.blockedProjectiles).join(',')}`;
     case 'trigger':
       // keep the payload shape in the signature: two triggers on the same projectile but
       // with different payloads must not fold into one
@@ -322,6 +322,8 @@ interface SummaryItem {
   count: number;
   modifiers: [string, number][];
   trigger?: SummaryTrigger;
+  /** Executed, but the projectile tree was already broken. */
+  blocked?: boolean;
 }
 
 function collectScopeState(nodes: CastTreeNode[]): Record<string, number> {
@@ -342,7 +344,7 @@ function collectScopeState(nodes: CastTreeNode[]): Record<string, number> {
 }
 
 function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
-  const collected: { entity: string; trigger?: SummaryTrigger }[] = [];
+  const collected: { entity: string; trigger?: SummaryTrigger; blocked?: boolean }[] = [];
   const modifierCounts = new Map<string, number>();
 
   const walk = (node: CastTreeNode) => {
@@ -379,6 +381,9 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
           }
           collected.push({ entity, trigger });
         }
+        for (const entity of visibleProjectiles(node.blockedProjectiles)) {
+          collected.push({ entity, blocked: true });
+        }
         node.children.forEach((child) => {
           // a trigger node belongs to the projectile that carries it: its payload was
           // summarized above in a fresh modifier scope, not in the outer cast block
@@ -409,7 +414,7 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
           projectile.trigger.payload.map((item) => [item.entity, item.count, item.modifiers]),
         ])
       : '';
-    const key = `${projectile.entity}|${modifierSignature}|${triggerSignature}`;
+    const key = `${projectile.entity}|${projectile.blocked ? 'blocked' : 'real'}|${modifierSignature}|${triggerSignature}`;
     const existing = grouped.get(key);
     if (existing) existing.count += 1;
     else {
@@ -418,15 +423,20 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
         count: 1,
         modifiers: modifierList,
         trigger: projectile.trigger,
+        blocked: projectile.blocked,
       });
     }
   }
   return [...grouped.values()];
 }
 
-function countSummary(items: SummaryItem[], acc = { projectiles: 0, modifiers: new Set<string>() }) {
+function countSummary(
+  items: SummaryItem[],
+  acc = { projectiles: 0, blocked: 0, modifiers: new Set<string>() },
+) {
   for (const item of items) {
-    acc.projectiles += item.count;
+    if (item.blocked) acc.blocked += item.count;
+    else acc.projectiles += item.count;
     for (const [id] of item.modifiers) acc.modifiers.add(id);
     if (item.trigger) countSummary(item.trigger.payload, acc);
   }
@@ -615,13 +625,18 @@ function SummaryItemCard({
   }
 
   return (
-    <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}`}>
+    <div className={`summary-card${depth > 0 ? ' summary-payload-card' : ''}${item.blocked ? ' summary-card-blocked' : ''}`}>
       <div className="summary-card-main">
         <div className="summary-zone summary-projectile-zone">
-          <span className="summary-zone-label">{t(lang, 'summary.labelProjectile')}</span>
-          <span className="summary-proj" title={projectileName}>
+          <span className="summary-zone-label">
+            {t(lang, item.blocked ? 'summary.labelBlocked' : 'summary.labelProjectile')}
+          </span>
+          <span className={`summary-proj${item.blocked ? ' blocked' : ''}`} title={projectileName}>
             <SpellIcon spell={spell} data={data} size="big" />
             <span className="summary-count">×{item.count}</span>
+            {item.blocked && (
+              <span className="summary-blocked-badge">{t(lang, 'summary.notGenerated')}</span>
+            )}
           </span>
         </div>
         {item.modifiers.length > 0 && (
@@ -701,6 +716,7 @@ function SpellSummary({
     return {
       items,
       projectileCount: counts.projectiles,
+      blockedCount: counts.blocked,
       modifierKinds: counts.modifiers.size,
       cessations: collectCessationEffects(tree),
     };
@@ -745,6 +761,11 @@ function SpellSummary({
                 projectiles: summary.projectileCount,
                 modifiers: summary.modifierKinds,
               })}
+            </div>
+          )}
+          {summary.blockedCount > 0 && (
+            <div className="summary-total summary-blocked-total">
+              {t(lang, 'summary.totalBlocked', { n: summary.blockedCount })}
             </div>
           )}
           {summary.cessations.length > 0 && (

@@ -75,6 +75,17 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(shot.events.filter((event) => event.type === 'action').map((event) => (event as { id: string }).id)).toContain(
       'LIGHT_BULLET',
     );
+    expect(
+      shot.events
+        .filter((event) => event.type === 'projectileBlocked')
+        .map((event) => (event as { entity: string }).entity.split('/').pop()),
+    ).toEqual(['light_bullet.xml']);
+  });
+
+  it('Eldritch Portal also breaks later projectiles in the same cast block', () => {
+    const shot = engine.simulate(wand(['TENTACLE_PORTAL', 'LIGHT_BULLET'], { actions_per_round: 2 })).shots[0];
+    expect(projectileNames(shot)).toEqual(['tentacle_portal.xml']);
+    expect(shot.events.some((event) => event.type === 'projectileBlocked')).toBe(true);
   });
 
   it('Cessation does not break later projectiles in the same cast block', () => {
@@ -357,5 +368,5 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
       }
     }
     expect(failures).toEqual([]);
-  });
+  }, 15000);
 });

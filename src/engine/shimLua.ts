@@ -123,11 +123,13 @@ __suppressed_projectile_ends = 0
 function BeginProjectile(name)
   local top = #__broken_projectile_blocks
   if top > 0 and __broken_projectile_blocks[top] then
+    __ev('projectileBlocked', name)
     __suppressed_projectile_ends = __suppressed_projectile_ends + 1
     return
   end
   __ev('projectileBegin', name)
-  if string.find(name, 'summon_portal.xml', 1, true) then
+  if string.find(name, 'summon_portal.xml', 1, true)
+    or string.find(name, 'tentacle_portal.xml', 1, true) then
     if top > 0 then __broken_projectile_blocks[top] = true end
   end
 end

@@ -143,6 +143,9 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
       case 'projectileBegin':
         events.push({ type: 'projectileBegin', entity: String(entry[1]) });
         break;
+      case 'projectileBlocked':
+        events.push({ type: 'projectileBlocked', entity: String(entry[1]) });
+        break;
       case 'projectileEnd':
         events.push({ type: 'projectileEnd' });
         break;

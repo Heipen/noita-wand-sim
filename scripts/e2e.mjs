@@ -389,9 +389,10 @@ await evaluate("document.querySelector('.condition-switch input').click(); true"
 console.log('✓ IF_ condition toggles change the simulated result');
 
 // Summon Portal breaks later projectile generation in the same cast block
-await loadWand(['SUMMON_PORTAL', 'LIGHT_BULLET']);
+await loadWand(['SUMMON_PORTAL', 'LIGHT_BULLET'], { actionsPerRound: 2 });
 await waitFor("[...document.querySelectorAll('.tree-badge')].some((el) => el.innerText.includes('阻断后续投射物'))", 60000, 'projectile-breaker tree badge');
 await waitFor("!!document.querySelector('.cast-block-note')", 10000, 'projectile-breaker action note');
+await waitFor("!!document.querySelector('.summary-card-blocked') && document.querySelector('.summary-card-blocked').innerText.includes('未生成')", 10000, 'blocked projectile summary');
 console.log('✓ stopping spells are marked in the tree and action summary');
 
 // end-of-cast hand flush: discard step must show the card already in discard and hand empty

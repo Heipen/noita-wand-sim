@@ -13,6 +13,7 @@ function actionAt(id: string, deckIndex: number): CastTreeNode {
     dontDraw: false,
     permanent: false,
     projectiles: [],
+    blockedProjectiles: [],
     children: [],
   };
 }
@@ -27,6 +28,7 @@ function action(id: string, children: CastTreeNode[] = []): CastTreeNode {
     dontDraw: false,
     permanent: false,
     projectiles: [],
+    blockedProjectiles: [],
     children,
   };
 }

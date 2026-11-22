@@ -1964,6 +1964,37 @@ main {
   background: #1a1622;
 }
 
+.summary-card-blocked {
+  border: 1px dashed #9c5454;
+  background: rgba(70, 28, 34, 0.28);
+}
+
+.summary-card-blocked .summary-projectile-zone {
+  border-color: #7d4141;
+  background: rgba(125, 65, 65, 0.18);
+}
+
+.summary-proj.blocked .mini-icon {
+  opacity: 0.45;
+  filter: grayscale(1);
+}
+
+.summary-blocked-badge {
+  padding: 1px 5px;
+  border: 1px solid #9c5454;
+  border-radius: 4px;
+  background: #5a2626;
+  color: #ffb3b3;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.summary-blocked-total {
+  color: #ff9d9d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .summary-card-main {
   display: flex;
   flex-wrap: wrap;

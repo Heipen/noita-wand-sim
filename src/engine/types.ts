@@ -40,6 +40,7 @@ export type EngineEvent =
       lifetimeAdd?: number;
     }
   | { type: 'projectileBegin'; entity: string }
+  | { type: 'projectileBlocked'; entity: string }
   | { type: 'projectileEnd' }
   | { type: 'triggerBegin'; kind: 'timer' | 'hitWorld' | 'death'; delayFrames?: number }
   | { type: 'triggerEnd' }
@@ -94,6 +95,8 @@ export type CastTreeNode =
       delta?: Record<string, number>;
       lifetimeAdd?: number;
       projectiles: string[];
+      /** Projectiles that were attempted but not generated because the tree broke. */
+      blockedProjectiles: string[];
       /** Index into the flat event log for the pile snapshot after this action. */
       eventIndex?: number;
       children: CastTreeNode[];
