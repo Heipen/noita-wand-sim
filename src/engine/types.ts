@@ -1,5 +1,8 @@
 /** Public types of the wand rule engine (M1). */
 
+/** Numeric shot-state values after a cast block finishes preloading. */
+export type ShotState = Record<string, number>;
+
 export type EngineEvent =
   | { type: 'shotStart'; mana: number; frame: number }
   | { type: 'orderDeck'; shuffled: boolean }
@@ -44,6 +47,8 @@ export type EngineEvent =
   | { type: 'projectileEnd' }
   | { type: 'triggerBegin'; kind: 'timer' | 'hitWorld' | 'death'; delayFrames?: number }
   | { type: 'triggerEnd' }
+  /** Final state of one cast block (root or trigger payload) after all draws. */
+  | { type: 'shotState'; state?: ShotState }
   | { type: 'notEnoughMana' }
   | { type: 'reload'; timeFrames: number }
   | { type: 'shotEnd'; castDelayFrames: number; reloadFrames: number };
@@ -69,7 +74,7 @@ export interface PileStep extends PileState {
 
 /** Evaluation tree node: the wand draw → card draw → action call hierarchy. */
 export type CastTreeNode =
-  | { kind: 'cast'; children: CastTreeNode[] }
+  | { kind: 'cast'; state?: ShotState; children: CastTreeNode[] }
   | { kind: 'drawBlock'; count: number; instantReload: boolean; children: CastTreeNode[] }
   | {
       kind: 'drawCard';
@@ -105,6 +110,8 @@ export type CastTreeNode =
       kind: 'trigger';
       triggerKind: 'timer' | 'hitWorld' | 'death';
       projectile: string | null;
+      /** Final state of this trigger's payload cast block. */
+      state?: ShotState;
       children: CastTreeNode[];
     }
   | { kind: 'discard'; spellId: string; sourceAction: string | null; eventIndex?: number; children: CastTreeNode[] };

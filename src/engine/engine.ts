@@ -34,6 +34,15 @@ interface Snapshot {
   events: Record<string, unknown>[];
 }
 
+function parseShotState(raw: unknown): Record<string, number> | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const parsed: Record<string, number> = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value === 'number' && Number.isFinite(value)) parsed[key] = value;
+  }
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
+}
+
 function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
   const events: EngineEvent[] = [];
   for (const entry of raw) {
@@ -158,6 +167,9 @@ function parseEvents(raw: Record<string, unknown>[]): EngineEvent[] {
         break;
       case 'triggerEnd':
         events.push({ type: 'triggerEnd' });
+        break;
+      case 'shotState':
+        events.push({ type: 'shotState', state: parseShotState(entry[1]) });
         break;
       case 'notEnoughMana':
         events.push({ type: 'notEnoughMana' });

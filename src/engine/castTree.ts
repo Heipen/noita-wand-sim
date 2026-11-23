@@ -124,6 +124,12 @@ export function buildCastTree(events: EngineEvent[]): CastTreeNode {
       case 'triggerEnd':
         if (top().kind === 'trigger') stack.pop();
         break;
+      case 'shotState': {
+        const trigger = nearest('trigger');
+        if (trigger && trigger.kind === 'trigger') trigger.state = event.state;
+        else root.state = event.state;
+        break;
+      }
       case 'projectileBegin': {
         lastProjectile = event.entity;
         const action = nearest('action');
@@ -208,6 +214,9 @@ export function buildCastBlock(events: EngineEvent[]): CastBlock {
       }
       case 'triggerEnd':
         if (stack.length > 1) stack.pop();
+        break;
+      case 'shotState':
+        if (event.state) current.castState = event.state;
         break;
       default:
         break;

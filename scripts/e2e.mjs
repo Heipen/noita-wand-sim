@@ -395,6 +395,33 @@ await waitFor("!!document.querySelector('.cast-block-note')", 10000, 'projectile
 await waitFor("!!document.querySelector('.summary-card-blocked') && document.querySelector('.summary-card-blocked').innerText.includes('未生成')", 10000, 'blocked projectile summary');
 console.log('✓ stopping spells are marked in the tree and action summary');
 
+// A cast block is fully preloaded before its projectiles are configured, so every
+// projectile in the block sees the block's final modifiers (8× LIFETIME_DOWN and
+// 11× PINGPONG_PATH = -61 frames here). Lifetime text also shows the frame count.
+await loadWand(
+  ['ADD_DEATH_TRIGGER', 'BOMB_DETONATOR', 'TAU', 'DIVIDE_3', 'LIFETIME_DOWN', 'DIVIDE_10',
+    'PINGPONG_PATH', 'ADD_DEATH_TRIGGER', 'TENTACLE_TIMER', 'ADD_TIMER', 'MIST_BLOOD',
+    'CASTER_CAST', 'HOMING_ACCELERATING', 'ZERO_DAMAGE', 'PIERCING_SHOT', 'ORBIT_LARPA',
+    'TELEPORT_PROJECTILE_CLOSER', 'DIVIDE_2', 'RESET'],
+  { capacity: 26, castDelayFrames: 30, rechargeFrames: 30, manaMax: 10000, manaChargeSpeed: 10000 },
+);
+const lifetimeCards = await waitFor(
+  "(() => { const card = [...document.querySelectorAll('.summary-card')].find((el) => el.querySelector('.summary-proj')?.title.includes('召唤触手')); const teleport = [...document.querySelectorAll('.summary-card')].find((el) => el.querySelector('.summary-proj')?.title.includes('归家')); return card && teleport ? { tentacle: card.innerText, tentacleMods: [...card.querySelectorAll('.summary-mod')].map((el) => el.title), teleport: teleport.innerText } : null; })()",
+  60000,
+  'preloaded lifetime summary',
+);
+if (!lifetimeCards.tentacle.includes('存在时间 -1.02s(-61f)')) {
+  throw new Error('tentacle lifetime should use the full block state: ' + lifetimeCards.tentacle);
+}
+if (!lifetimeCards.tentacleMods.some((title) => title.includes('缩减存在时间 ×8')) ||
+    !lifetimeCards.tentacleMods.some((title) => title.includes('乒乓回弹 ×11'))) {
+  throw new Error('tentacle should list the full block modifiers: ' + JSON.stringify(lifetimeCards.tentacleMods));
+}
+if (!lifetimeCards.teleport.includes('存在时间 +4.67s(+280f)')) {
+  throw new Error('teleport lifetime should be +280 frames: ' + lifetimeCards.teleport);
+}
+console.log('✓ cast-block state and lifetime seconds/frames summary');
+
 // end-of-cast hand flush: discard step must show the card already in discard and hand empty
 await loadWand(['BURST_3', 'LIGHT_BULLET', 'LIGHT_BULLET', 'LIGHT_BULLET'], { capacity: 4 });
 await waitFor("!!document.querySelector('.tree-discard[data-event-index]')", 60000, 'discard step');

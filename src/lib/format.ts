@@ -13,6 +13,14 @@ export function formatFramesAsSeconds(frames: number, opts: { signed?: boolean }
   return opts.signed && seconds > 0 ? `+${text}` : text;
 }
 
+/** Lifetime display: seconds plus the exact frame count, e.g. "-1.02s(-61f)". */
+export function formatLifetime(frames: number, opts: { signed?: boolean } = {}): string {
+  const seconds = formatFramesAsSeconds(frames, opts);
+  const frameText = formatNumber(frames, 2);
+  const signedFrames = opts.signed && frames > 0 ? `+${frameText}` : frameText;
+  return `${seconds}s(${signedFrames}f)`;
+}
+
 /** Parse a `d`/`r` URL parameter: integers are frames, decimals are seconds. */
 export function parseUrlFrames(raw: string | null): number | null {
   if (raw === null || raw === '') return null;

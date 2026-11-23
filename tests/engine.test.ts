@@ -283,6 +283,31 @@ describe.skipIf(!available)('rule engine (real gun.lua from the data pack)', () 
     expect(payload?.actions[0].delta?.fire_rate_wait).toBe(100);
   });
 
+  it('uses the final state of each preloaded cast block for its projectiles', () => {
+    const shot = engine.simulate(
+      wand([
+        'ADD_DEATH_TRIGGER', 'BOMB_DETONATOR', 'TAU', 'DIVIDE_3', 'LIFETIME_DOWN',
+        'DIVIDE_10', 'PINGPONG_PATH', 'ADD_DEATH_TRIGGER', 'TENTACLE_TIMER', 'ADD_TIMER',
+        'MIST_BLOOD', 'CASTER_CAST', 'HOMING_ACCELERATING', 'ZERO_DAMAGE', 'PIERCING_SHOT',
+        'ORBIT_LARPA', 'TELEPORT_PROJECTILE_CLOSER', 'DIVIDE_2', 'RESET',
+      ], { cast_delay: 30, mana_max: 10000, mana_charge_speed: 10000 }),
+      { mana: 10000 },
+    ).shots[0];
+    const triggers: { projectile: string | null; lifetime: number | undefined }[] = [];
+    const walk = (node: any) => {
+      if (node.kind === 'trigger') {
+        triggers.push({ projectile: node.projectile, lifetime: node.state?.lifetime_add });
+      }
+      node.children.forEach(walk);
+    };
+    walk(shot.tree);
+    // 8 × LIFETIME_DOWN + 11 × PINGPONG_PATH = -61 frames for the bomb's death payload.
+    expect(triggers.find((trigger) => trigger.projectile?.endsWith('/bomb_detonator.xml'))?.lifetime).toBe(-61);
+    // The timer payload only has ZERO_DAMAGE's +280 frames; nested action deltas must not be
+    // counted a second and third time.
+    expect(triggers.find((trigger) => trigger.projectile?.endsWith('/mist_blood.xml'))?.lifetime).toBe(280);
+  });
+
   it('records the lifetime bonus used by CESSATION', () => {
     const shot = engine.simulate(wand(['LIFETIME', 'CESSATION']), { mana: 1000 }).shots[0];
     const actions: any[] = [];

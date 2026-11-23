@@ -412,13 +412,17 @@ local __delta_fields = {
   'bounces', 'screenshake', 'recoil', 'action_draw_many_count',
 }
 
-local function __capture_shot_state()
+local function __capture_state(state)
   local out = {}
   for i = 1, #__delta_fields do
     local field = __delta_fields[i]
-    out[field] = c[field] or 0
+    out[field] = state[field] or 0
   end
   return out
+end
+
+local function __capture_shot_state()
+  return __capture_state(c)
 end
 
 local function __state_delta(before)
@@ -512,6 +516,16 @@ function __install_hooks()
     __ev('drawBlockBegin', how_many, instant_reload_if_empty == true)
     local result = orig_draw_actions(how_many, instant_reload_if_empty)
     __ev('drawBlockEnd')
+    return result
+  end
+
+  -- A projectile is configured only after the whole cast block has been preloaded:
+  -- draw_shot() draws every action first and calls SetProjectileConfigs() afterwards.
+  -- Emit the final block state while shot.state is still current (c is restored on return).
+  local orig_draw_shot = draw_shot
+  function draw_shot(shot, instant_reload_if_empty)
+    local result = orig_draw_shot(shot, instant_reload_if_empty)
+    __ev('shotState', __capture_state(shot.state))
     return result
   end
 

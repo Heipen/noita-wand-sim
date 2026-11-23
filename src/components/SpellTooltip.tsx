@@ -1,5 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { DAMAGE_DISPLAY_SCALE, formatFramesAsSeconds, formatNumber } from '../lib/format';
+import {
+  DAMAGE_DISPLAY_SCALE,
+  formatFramesAsSeconds,
+  formatLifetime,
+  formatNumber,
+} from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
 import { spellTypeLabel, t } from '../lib/i18n';
 import type { GameData, Lang, SpellMeta } from '../lib/types';
@@ -67,13 +72,17 @@ async function loadProjectileStats(data: GameData, spell: SpellMeta): Promise<Pr
   return stats;
 }
 
-const EFFECT_FIELDS: { key: string; label: string; kind: 'damage' | 'percent' | 'degrees' | 'multiplier' | 'number' | 'seconds' }[] = [
+const EFFECT_FIELDS: {
+  key: string;
+  label: string;
+  kind: 'damage' | 'percent' | 'degrees' | 'multiplier' | 'number' | 'seconds' | 'lifetime';
+}[] = [
   { key: 'damage_projectile_add', label: 'effect.damageProjectile', kind: 'damage' },
   { key: 'damage_explosion_add', label: 'effect.damageExplosion', kind: 'damage' },
   { key: 'damage_critical_chance', label: 'effect.critChance', kind: 'percent' },
   { key: 'spread_degrees', label: 'effect.spread', kind: 'degrees' },
   { key: 'speed_multiplier', label: 'effect.speed', kind: 'multiplier' },
-  { key: 'lifetime_add', label: 'effect.lifetime', kind: 'number' },
+  { key: 'lifetime_add', label: 'effect.lifetime', kind: 'lifetime' },
   { key: 'bounces', label: 'effect.bounces', kind: 'number' },
   { key: 'explosion_radius', label: 'effect.explosionRadius', kind: 'number' },
   { key: 'fire_rate_wait', label: 'effect.castDelay', kind: 'seconds' },
@@ -93,6 +102,8 @@ function effectValue(kind: (typeof EFFECT_FIELDS)[number]['kind'], raw: number):
       return `${raw > 0 ? '+' : ''}${formatNumber(raw)}×`;
     case 'seconds':
       return `${raw > 0 ? '+' : ''}${formatFramesAsSeconds(raw)}s`;
+    case 'lifetime':
+      return formatLifetime(raw, { signed: true });
     default:
       return `${raw > 0 ? '+' : ''}${formatNumber(raw)}`;
   }
@@ -179,7 +190,7 @@ export function SpellTooltip({ tooltip, data, lang }: Props) {
   if (projectileStats?.lifetime !== null && projectileStats?.lifetime !== undefined) {
     rows.push({
       label: t(lang, 'tooltip.lifetime'),
-      value: `${formatFramesAsSeconds(projectileStats.lifetime)}s`,
+      value: formatLifetime(projectileStats.lifetime),
     });
   }
 

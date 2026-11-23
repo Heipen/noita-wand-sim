@@ -1,7 +1,12 @@
 import { Fragment, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { CastTreeNode, EngineEvent, RequirementOptions, ShotResult, SimulationResult } from '../engine/types';
-import { DAMAGE_DISPLAY_SCALE, formatFramesAsSeconds, formatNumber } from '../lib/format';
+import {
+  DAMAGE_DISPLAY_SCALE,
+  formatFramesAsSeconds,
+  formatLifetime,
+  formatNumber,
+} from '../lib/format';
 import { spellIconUrl } from '../lib/icons';
 import { t } from '../lib/i18n';
 import type { GameData, Lang, SpellMeta } from '../lib/types';
@@ -122,7 +127,10 @@ function triggerLabel(kind: 'timer' | 'hitWorld' | 'death'): string {
   return 'result.triggerHitWorld';
 }
 
-const DELTA_FORMATS: Record<string, { label: string; kind: 'seconds' | 'number' | 'percent' | 'degrees' | 'multiplier' | 'damage' }> = {
+const DELTA_FORMATS: Record<
+  string,
+  { label: string; kind: 'seconds' | 'lifetime' | 'number' | 'percent' | 'degrees' | 'multiplier' | 'damage' }
+> = {
   fire_rate_wait: { label: 'delta.castDelay', kind: 'seconds' },
   reload_time: { label: 'delta.recharge', kind: 'seconds' },
   damage_projectile_add: { label: 'delta.damageProjectile', kind: 'damage' },
@@ -130,7 +138,7 @@ const DELTA_FORMATS: Record<string, { label: string; kind: 'seconds' | 'number' 
   damage_critical_chance: { label: 'delta.critChance', kind: 'percent' },
   spread_degrees: { label: 'delta.spread', kind: 'degrees' },
   speed_multiplier: { label: 'delta.speed', kind: 'multiplier' },
-  lifetime_add: { label: 'delta.lifetime', kind: 'seconds' },
+  lifetime_add: { label: 'delta.lifetime', kind: 'lifetime' },
   bounces: { label: 'delta.bounces', kind: 'number' },
   explosion_radius: { label: 'delta.explosionRadius', kind: 'number' },
   screenshake: { label: 'delta.screenshake', kind: 'number' },
@@ -153,6 +161,9 @@ function formatDeltas(delta: Record<string, number> | undefined, lang: Lang): st
     switch (format.kind) {
       case 'seconds':
         rendered = `${signed(formatFramesAsSeconds(value))}s`;
+        break;
+      case 'lifetime':
+        rendered = formatLifetime(value, { signed: true });
         break;
       case 'damage':
         rendered = signed(formatNumber(value * DAMAGE_DISPLAY_SCALE));
@@ -345,7 +356,7 @@ export type { GroupedEntry, GroupedNode };
 interface SummaryTrigger {
   kind: 'timer' | 'hitWorld' | 'death';
   payload: SummaryItem[];
-  /** Accumulated shot state of the payload scope (its own modifiers). */
+  /** Final shot state of the trigger's own cast block. */
   state?: Record<string, number>;
 }
 
@@ -356,23 +367,6 @@ interface SummaryItem {
   trigger?: SummaryTrigger;
   /** Executed, but the projectile tree was already broken. */
   blocked?: boolean;
-}
-
-function collectScopeState(nodes: CastTreeNode[]): Record<string, number> {
-  // a trigger payload starts from a fresh shot state; reconstruct its stats from the
-  // action deltas in that scope (do not descend into nested triggers, they have their own)
-  const state: Record<string, number> = { speed_multiplier: 1 };
-  const walk = (node: CastTreeNode) => {
-    if (node.kind === 'trigger') return;
-    if (node.kind === 'action') {
-      for (const [key, value] of Object.entries(node.delta ?? {})) {
-        state[key] = (state[key] ?? 0) + value;
-      }
-    }
-    node.children.forEach(walk);
-  };
-  nodes.forEach(walk);
-  return state;
 }
 
 function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
@@ -408,7 +402,7 @@ function summarizeNodes(nodes: CastTreeNode[], maps: SpellMaps): SummaryItem[] {
             trigger = {
               kind: triggerNode.triggerKind,
               payload: summarizeNodes(triggerNode.children, maps),
-              state: collectScopeState(triggerNode.children),
+              state: triggerNode.state,
             };
           }
           collected.push({ entity, trigger });
@@ -510,33 +504,30 @@ function CessationLifetimeBadge({
   if (node.id !== 'CESSATION' || node.lifetimeAdd === undefined) return null;
   const bonus = node.lifetimeAdd;
   const frames = CESSATION_BASE_LIFETIME + bonus;
-  const seconds = formatFramesAsSeconds(frames);
-  const bonusSeconds = formatFramesAsSeconds(bonus, { signed: true });
+  const base = formatLifetime(CESSATION_BASE_LIFETIME);
+  const seconds = formatLifetime(frames);
+  const bonusSeconds = formatLifetime(bonus, { signed: true });
   return (
     <span
       className={`tree-effect${bonus !== 0 ? ' active' : ''}`}
-      title={t(lang, 'tree.cessationHint', { seconds, bonusSeconds })}
+      title={t(lang, 'tree.cessationHint', { base, seconds, bonus: bonusSeconds })}
     >
       {t(lang, 'tree.cessationLifetime', { seconds })}
-      {bonus !== 0 && (
-        <sup>
-          {bonusSeconds}s
-        </sup>
-      )}
+      {bonus !== 0 && <sup>{bonusSeconds}</sup>}
     </span>
   );
 }
 
 const SUMMARY_STATE_ROWS: {
   key: string;
-  format: 'seconds' | 'percent' | 'multiplier' | 'degrees' | 'number' | 'damage';
+  format: 'lifetime' | 'percent' | 'multiplier' | 'degrees' | 'number' | 'damage';
 }[] = [
   { key: 'damage_projectile_add', format: 'damage' },
   { key: 'damage_explosion_add', format: 'damage' },
   { key: 'damage_critical_chance', format: 'percent' },
   { key: 'spread_degrees', format: 'degrees' },
   { key: 'speed_multiplier', format: 'multiplier' },
-  { key: 'lifetime_add', format: 'seconds' },
+  { key: 'lifetime_add', format: 'lifetime' },
   { key: 'bounces', format: 'number' },
   { key: 'explosion_radius', format: 'number' },
 ];
@@ -546,9 +537,8 @@ function stateValue(
   value: number,
   signed = false,
 ): string {
-  if (format === 'seconds') {
-    const text = formatFramesAsSeconds(value);
-    return signed && value > 0 ? `+${text}` : text;
+  if (format === 'lifetime') {
+    return formatLifetime(value, { signed });
   }
   if (format === 'damage') {
     const text = formatNumber(value * DAMAGE_DISPLAY_SCALE);
@@ -808,19 +798,20 @@ function SpellSummary({
                   className="summary-effect"
                   key={index}
                   title={t(lang, 'tree.cessationHint', {
-                    seconds: formatFramesAsSeconds(effect.frames),
-                    bonusSeconds: formatFramesAsSeconds(effect.bonus, { signed: true }),
+                    base: formatLifetime(CESSATION_BASE_LIFETIME),
+                    seconds: formatLifetime(effect.frames),
+                    bonus: formatLifetime(effect.bonus, { signed: true }),
                   })}
                 >
                   <SpellIcon spell={maps.byId.get('CESSATION')} data={data} />
                   <span>
                     {t(lang, 'summary.cessation', {
-                      seconds: formatFramesAsSeconds(effect.frames),
+                      seconds: formatLifetime(effect.frames),
                     })}
                   </span>
                   {effect.bonus !== 0 && (
                     <span className="summary-effect-bonus">
-                      {formatFramesAsSeconds(effect.bonus, { signed: true })}s
+                      {formatLifetime(effect.bonus, { signed: true })}
                     </span>
                   )}
                   {effect.count > 1 && <span className="summary-effect-count">×{effect.count}</span>}
